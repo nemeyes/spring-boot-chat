@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  	<head>
+	    <title>사용자 등록하기</title>
+	    <meta charset="utf-8">
+	    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	    <link rel="stylesheet" href="css/bootstrap.min.css">
+  	</head>
+    <body>
+    	<div class="container" id="app">
+			<h2 class="form-signin-heading">등록할 사용자 정보를 입력해 주세요</h2>
+			<p>
+                <label for="password" class="sr-only">아이디</label>
+				<input type="text" class="form-control" v-model="new_user_id" placeholder="비즈니스 로직에서 사용하는 사용자 ID(유일한값)" required autofocus/>
+			</p>
+    		<p>
+      			<label for="password" class="sr-only">비밀번호</label>
+      			<input type="password" class="form-control" v-model="new_user_password" placeholder="비즈니스 로직에서 사용하는 사용자 패스워드 값" required/>
+    		</p>
+    		<p>
+      			<label for="username" class="sr-only">대화명</label>
+      			<input type="username" class="form-control" v-model="new_user_nickname" placeholder="비즈니스 로직에서 사용하는 사용자 이름" required/>
+    		</p>
+    		<button class="btn btn-lg btn-primary btn-block" @click="register">사용자 등록하기</button>
+            <button class="btn btn-lg btn-primary btn-block" onclick="location.href='admin.html'">관리자 화면으로 가기</button>
+		</div>
+    <!-- JavaScript -->
+    <script src="/js/vue.min.js"></script>
+    <script src="/js/axios.min.js"></script>
+    <script>
+		var host = 'http://localhost:3030';
+        //var host = 'https://chat-api.seers-visual-system.link';
+        var vm = new Vue({
+            el: '#app',
+            data: {
+                gran_type : '',
+                access_token : '',
+                refresh_token : '',
+                refresh_token_expiration_time : '',
+                user_id : '',
+                user_nickname : '',
+                user_role : '',
+
+                new_user_id : '',
+                new_user_password : '',
+                new_user_nickname : '',
+                after_reissue_func: null
+            },
+            created() {
+                this.grant_type = localStorage.getItem('seerschat.grant_type');
+                this.access_token = localStorage.getItem('seerschat.access_token');
+                this.refresh_token = localStorage.getItem('seerschat.refresh_token');
+				this.refresh_token_exp_time = localStorage.getItem('seerschat.refresh_token_expiration_time');
+				this.user_id = localStorage.getItem('seerschat.user_id');
+				this.user_nickname = localStorage.getItem('seerschat.user_nickname');
+				this.user_role = localStorage.getItem('seerschat.user_role');
+                if(this.access_token==null || this.access_token===undefined) {
+                    location.href="admin.html";
+                }
+            },
+            methods: {
+                reissue: function() {
+                    var payload = {
+                        "access_token" : this.access_token,
+                        "refresh_token" : this.refresh_token
+                    };
+
+                    axios.post(host + '/user/reissue', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        if(response.data.code=="CODE_SUCCESS") {
+                            this.grant_type = response.data.grant_type;
+                            this.access_token = response.data.access_token;
+                            this.refresh_token = response.data.refresh_token;
+                            this.refresh_token_exp_time = response.data.refresh_token_exiration_time;
+
+                            localStorage.setItem('seerschat.grant_type', this.grant_type);
+                            localStorage.setItem('seerschat.access_token', this.access_token);
+                            localStorage.setItem('seerschat.refresh_token', this.refresh_token);
+                            localStorage.setItem('seerschat.refresh_token_expiration_time', this.refresh_token_exp_time);
+
+                            //this.get_rooms();
+                            if(this.after_reissue_func!=null && this.after_reissue_func!==undefined) {
+                                this.after_reissue_func();
+                            }
+                        } else {
+                            alert("토큰 재발급 과정에서 실패했습니다."); 
+                        }
+                    })
+                    .catch( 
+                        response => {
+                            alert("토큰 재발급 과정에서 오류가 발생했습니다."); 
+                        } 
+                    );
+                },
+                register: function() {
+                    if("" === this.new_user_id) {
+                        alert("로그인 아이디를 입력해 주십시요.");
+                        return;
+                    } else if("" === this.new_user_password) {
+                    	alert("로그인 패스워드를 입력해 주십시요.");
+                        return;
+                    } else if("" === this.new_user_nickname) {
+                    	alert("로그인 닉네임을 입력해 주십시요.");
+                        return;	                        
+                    } else {
+                        var payload = {
+                        	"user_id" : this.new_user_id,
+                        	"user_password" : this.new_user_password,
+                        	"user_nickname" : this.new_user_nickname,
+                        	"user_roles" : [
+                        		"user"
+                        	]
+                        };
+    
+                        axios.post(host + '/user/signup', JSON.stringify(payload), {
+			            	headers : {
+			                    'Content-Type' : 'application/json;charset=utf-8',
+                                'Authorization' : this.grant_type + ' ' + this.access_token
+			                }
+                        })
+                        .then(
+                            response => {
+                                alert("가입에 성공하였습니다.")
+                                location.href="admin.html";
+                            }
+                        )
+                        .catch( 
+                            response => { 
+                                if(response.response.status==401) {
+                                    alert("토큰이 만료되어 재발급 합니다.");
+                                    this.after_reissue_func = this.register;
+                                    this.reissue();
+                                } else {
+                                    alert("가입에 실패하였습니다."); 
+                                }
+                            }
+                        );
+                    }
+                }
+            }
+        });
+    </script>
+    </body>
+</html>
