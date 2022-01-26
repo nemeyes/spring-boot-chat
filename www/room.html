@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>씨어스테크</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <style>
+      [v-cloak] {
+          display: none;
+      }
+    .chat-area {
+        /*   border: 1px solid #ccc; */
+        background: white;
+        height: 80vh;
+        padding: 0em;
+        overflow: auto;
+        max-width: 100%;
+        margin: 0 auto 2em auto;
+        /*box-shadow: 1px 1px 3px 1px rgba(0, 0, 0, 0.3)*/
+    }
+    .message {
+        width: 40%;
+        border-radius: 10px;
+        padding: .5em;
+        margin-bottom: .5em;
+        font-size: .9em;
+    }
+    
+    .message-out {
+        background: #407FFF;
+        color: white;
+        margin-left: 59%;
+        margin-top:5px;
+    }
+    
+    .message-in {
+        background: #F1F0F0;
+        color: black;
+        margin-left: 1%;
+        margin-top:5px;
+    }
+
+    .modal-mask {
+        position: fixed;
+        z-index: 9998;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, .5);
+        display: table;
+        transition: opacity .3s ease;
+    }
+
+    .modal-wrapper {
+        display: table-cell;
+        vertical-align: middle;
+    }
+
+    .modal-container {
+        width: 800px;
+        margin: 0px auto;
+        padding: 20px 30px;
+        background-color: #fff;
+        border-radius: 2px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .33);
+        transition: all .3s ease;
+        font-family: Helvetica, Arial, sans-serif;
+    }
+
+    .modal-header h5 {
+        margin-top: 0;
+        color: #42b983;
+    }
+
+    .modal-body {
+        margin: 20px 0;
+    }
+
+    .modal-default-button {
+        float: right;
+    }
+
+    .modal-enter {
+        opacity: 0;
+    }
+
+    .modal-leave-active {
+        opacity: 0;
+    }
+
+    .modal-enter .modal-container,
+    .modal-leave-active .modal-container {
+        -webkit-transform: scale(1.1);
+        transform: scale(1.1);
+    }
+    </style>
+  </head>
+  <body>
+    <div class="container" id="app" v-cloak>
+        <div class="row">
+            <div class="col-md-6">
+                <h4>{{room_name}} <span class="badge badge-info badge-pill">{{user_count}}</span></h4>
+            </div>
+            <div class="col-md-6 text-right">
+                <a class="btn btn-primary btn-sm" @click="logout">로그아웃</a>
+                <a class="btn btn-info btn-sm" href="lobby.html">로비로 이동하기</a>
+                <a class="btn btn-info btn-sm" @click="leave_room">방(Room) 탈퇴하기</a>
+            </div>
+        </div>
+        <div class="input-group-lg">
+            <div class="input-group-lg">
+                <label class="input-group-text">{{room_description}}</label>
+            </div>
+        </div>
+        <p>
+
+        </p>
+        <div class="row">
+            <ul class="col-md-10">
+
+                <section ref="chatArea" class="chat-area">
+                    <li v-for="message in messages" class="message" :class="{ 'message-out': message.user_id === user_id, 'message-in': message.user_id !== user_id }">
+                        <div><input  v-if="message.selectable" type="radio" :value="message.id" v-model="message_id"> {{message.nickname}} ({{message.timestamp}})</div>
+                        <div v-if="message.comment"><u>{{ message.comment_message }} 글에 대한 댓글입니다.</u></div>
+                        <div>{{ message.message }}</div>
+                    </li>
+                  </section>
+            </ul> 
+            <div class="col-md-2">
+                <div class="input-group-lg">
+                    <label class="input-group-text">방(Room) 참여자</label>
+                </div>
+                <li class="list-group-item list-group-item-action" v-for="item in users" v-bind:key="item.id">
+                    <h6>{{item.name}}</h6>
+                </li>
+                <div class="input-group-lg">
+                    <a id="show-modal" class="input-group-text" @click="show_invite_modal = true">사용자 초대하기</a>
+                <!--button id="show-modal" class="input-group-append" @click="show_invite_modal = true">Invite User</button//-->
+                </div>
+                <modal v-if="show_invite_modal" @close="show_invite_modal = false">
+                    <!--
+                      you can use custom content here to overwrite
+                      default content
+                    -->
+                    <h5 slot="header">방(Room)에 초대할 사람을 추가하세요.</h5>
+                    <div slot="body">
+                        <div class="input-group-prepend">
+                            <label class="input-group-text">방(Room)에 참여할 사용자 아이디를 입력해주세요.</label>
+                        </div>
+                        <input type="text" class="form-control" v-model="invite_user_id">
+                    </div>
+                    <div slot="footer">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="button" @click="invite_user">추가하기</button>
+                        </div>
+                    </div>
+                  </modal>
+            </div>
+        </div>
+        <div class="input-group">
+            <div class="input-group-lg">
+                <label class="input-group-text">메시지</label>
+            </div>            
+            <input type="text" class="form-control" v-model="message">
+            <div class="input-group-lg">
+                <a class="btn btn-primary" @click="send_message('MSG_TALK')">메시지 보내기</a>
+                <a class="btn btn-info" @click="send_comment('MSG_TALK')">댓글달기</a>
+            </div>
+        </div>
+    </div>
+    <!-- JavaScript -->
+    <script src="/js/vue.min.js"></script>
+    <script src="/js/axios.min.js"></script>
+    <script src="/js/sockjs.min.js"></script>
+    <script src="/js/stomp.min.js"></script>
+    <script type="text/x-template" id="modal-template">
+        <transition name="modal">
+            <div class="modal-mask">
+                <div class="modal-wrapper">
+                    <div class="modal-container">
+                        <div class="modal-header">
+                            <slot name="header">
+                                default header
+                            </slot>
+                        </div>
+                        <div class="modal-body">
+                            <slot name="body">
+                                default body
+                            </slot>
+                        </div>
+                        <div class="modal-footer">
+                            <slot name="footer">
+                              default footer
+                              <button class="modal-default-button" @click="$emit('close')">
+                                OK
+                              </button>
+                            </slot>
+                          </div>  
+                    </div>
+                </div>
+            </div>
+        </transition>
+    </script>
+    <script>
+        //var _this = null;
+        var host = 'http://localhost:3030';
+        //var host = 'https://chat-api.seers-visual-system.link';
+        var sock = new SockJS(host + "/seers");
+        var ws = Stomp.over(sock);
+        Vue.component('modal', {
+            template: '#modal-template'
+        });
+        var vm = new Vue({
+            el: '#app',
+            data: {
+                gran_type : '',
+                access_token : '',
+                refresh_token : '',
+                refresh_token_expiration_time : '',
+                user_id : '',
+                user_nickname : '',
+                user_role : '',
+
+                room_id: '',
+                room_name: '',
+                room_description: '',
+                
+                show_invite_modal: false,
+                message: '',
+                messages: [],
+                access_token: '',
+                user_count: 0,
+                users : [],
+                invite_user_id: '',
+                user_nicknames : null,
+                message_id: '',
+                after_reissue_func: null
+            },
+            created() {
+                this.grant_type = localStorage.getItem('seerschat.grant_type');
+                this.access_token = localStorage.getItem('seerschat.access_token');
+                this.refresh_token = localStorage.getItem('seerschat.refresh_token');
+				this.refresh_token_exp_time = localStorage.getItem('seerschat.refresh_token_expiration_time');
+				this.user_id = localStorage.getItem('seerschat.user_id');
+				this.user_nickname = localStorage.getItem('seerschat.user_nickname');
+				this.user_role = localStorage.getItem('seerschat.user_role');
+
+                if(this.access_token==null || this.access_token===undefined) {
+                    location.href="login.html";
+                }
+
+                this.room_id = localStorage.getItem('seerschat.room_id');
+                this.room_name = localStorage.getItem('seerschat.room_name');
+                this.room_description = localStorage.getItem('seerschat.room_description');
+                
+                this.user_nicknames = new Map();
+
+                var _this = this;
+
+                this.get_room_users();
+
+                ws.connect({ "Authorization" : _this.grant_type + ' ' + _this.access_token }, function(frame) {
+                    ws.subscribe("/sub/chat/room/" + _this.room_id, function(message) {
+                        var recv = JSON.parse(message.body);
+                        _this.recv_message(recv);
+                    });
+                }, 
+                function(error) {
+                    alert("failed in connecting server. please retry again.");
+                    location.href="lobby.html";
+                });
+            },
+            methods: {
+                logout: function() {
+                    var payload = {
+                        "access_token" : this.access_token,
+                        "refresh_token" : this.refresh_token
+                    };
+
+                    axios.post(host + '/user/logout', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        if(response.data.code=="CODE_SUCCESS") {
+                            localStorage.clear();
+                            location.href="login.html";
+                        } else {
+                            alert("로그아웃에 실패했습니다."); 
+                        }
+                    })
+                    .catch( 
+                        response => {
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.logout;
+                                this.reissue();
+                            } else {
+                                alert("로그아웃과정에서 오류가 발생했습니다.");
+                            }
+                        } 
+                    );
+                },
+                reissue: function() {
+                    var payload = {
+                        "access_token" : this.access_token,
+                        "refresh_token" : this.refresh_token
+                    };
+
+                    axios.post(host + '/user/reissue', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        if(response.data.code=="CODE_SUCCESS") {
+                            this.grant_type = response.data.grant_type;
+                            this.access_token = response.data.access_token;
+                            this.refresh_token = response.data.refresh_token;
+                            this.refresh_token_exp_time = response.data.refresh_token_exiration_time;
+
+                            localStorage.setItem('seerschat.grant_type', this.grant_type);
+                            localStorage.setItem('seerschat.access_token', this.access_token);
+                            localStorage.setItem('seerschat.refresh_token', this.refresh_token);
+                            localStorage.setItem('seerschat.refresh_token_expiration_time', this.refresh_token_exp_time);
+
+                            //this.get_rooms();
+                            if(this.after_reissue_func!=null && this.after_reissue_func!==undefined) {
+                                this.after_reissue_func();
+                            }
+                        } else {
+                            alert("토큰 재발급 과정에서 실패했습니다."); 
+                        }
+                    })
+                    .catch( 
+                        response => {
+                            alert("토큰 재발급 과정에서 오류가 발생했습니다."); 
+                        } 
+                    );
+                },                
+                get_room_users: function() {
+                    var payload = {
+                        "room_id" : this.room_id
+                    };
+                    axios.post(host + '/chat/room/users', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                                this.users = response.data.participants;
+                                this.user_count = response.data.participants.length;
+
+                                Array.from(this.users).forEach(function(element) {
+                                    vm.user_nicknames[element.id] = element.name;
+                                });
+
+                                this.get_room_messages();
+                            } else {
+                                alert(response.data.message); 
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.get_room_users;
+                                this.reissue();
+                            } else {
+                                alert("방(Room) 참여자 정보를 가져오는 과정에서 오류가 발생했습니다."); 
+                                this.room_name = '';
+                                this.users = [];
+                            }
+                        } 
+                    );
+                },
+                get_room_messages: function() {
+                    var payload = {
+                        "room_id" : this.room_id
+                    };
+                    axios.post(host + '/chat/messages', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                                Array.from(response.data.messages).forEach(function(element) {
+                                    vm.parse_room_message(element);
+                                });
+
+                            } else {
+                                alert(response.data.message); 
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => {
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.get_room_messages;
+                                this.reissue();
+                            } else {
+                                alert("방(Room) 메시지 목록을 가져오는 과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
+                },
+                leave_room: function() {
+                   var payload = {
+                        "room_id" : this.room_id
+                    };
+                    axios.post(host + '/chat/room/leave', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                                location.href="lobby.html";
+                            } else {
+                                alert(response.data.message); 
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.leave_room;
+                                this.reissue();
+                            } else {
+                                alert("방(Room)을 이탈하는 과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
+                },
+                invite_user: function() {
+                    if("" === this.invite_user_id) {
+                        alert("초대할 사용자 아이디를 입력해주세요.");
+                        return;
+                    } else {
+                        var payload = {
+                            "room_id" : this.room_id,
+                            "user_id" : this.invite_user_id
+                        };
+                        axios.post(host + '/chat/room/invite', JSON.stringify(payload), {
+                            headers : {
+                                'Content-Type' : 'application/json;charset=utf-8',
+                                'Authorization' : this.grant_type + ' ' + this.access_token
+                            }
+                        })
+                        .then(
+                            response => {
+                                if(response.data.code=="CODE_SUCCESS") {
+                                    this.get_room_users();
+                                } else {
+                                    alert(response.data.message);
+                                }
+                                this.show_invite_modal = false;
+                            }
+                        )
+                        .catch( 
+                            response => { 
+                                if(response.response.status==401) {
+                                    alert("토큰이 만료되어 재발급 합니다.");
+                                    this.after_reissue_func = this.invite_user;
+                                    this.reissue();
+                                } else {
+                                    alert("사용자 초대과정에서 오류가 발생했습니다."); 
+                                    this.show_invite_modal = false;
+                                }
+                            } 
+                        );
+                    }
+                },
+                parse_room_message: function(recv) {
+                    const selectable = recv.user_id!=this.user_id;
+                    const comment = (recv.parent_message!=null && recv.parent_message!==undefined);
+                    if(recv.type=="MSG_ENTER") {
+                        if(recv.participants !== undefined && recv.participants != null && recv.participants.length>0) {
+                            this.users = recv.participants;
+                            this.user_count = recv.participants.length;
+                            Array.from(this.users).forEach(function(element) {
+                                vm.user_nicknames[element.id] = element.name;
+                            });
+                        }
+
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 참여하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                    } else if(recv.type=="MSG_QUIT") {
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 퇴장하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                    } else if(recv.type=="MSG_NOTI") {
+                        const nickname = '';
+                        const message = recv.message;
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                    } else {
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = recv.message;
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(comment) {
+                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": true, "comment_message": recv.parent_message.message});
+                        } else {
+                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": false, "comment_message": ''});
+                        }
+                        
+                    }
+                    Vue.nextTick(() => {
+                        let messageDisplay = this.$refs.chatArea
+                        messageDisplay.scrollTop = messageDisplay.scrollHeight
+                    })
+                },                  
+                send_message: function(type) {
+                    if(this.message==="") {
+                        alert("메세지를 입력해주세요."); 
+                        return;
+                    }
+                    ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message}));
+                    this.message = '';
+                },
+                send_comment: function(type) {
+                    if(this.message==="") {
+                        alert("메세지를 입력해주세요."); 
+                        return;
+                    }
+                    if(this.message_id==="") {
+                        alert("댓글달 메시지를 선택해주세요(라디오버튼 선택)."); 
+                        return;
+                    }
+                    //alert(this.message_id);
+                    ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message, parent_message_id:this.message_id}));
+                    this.message = '';
+                },
+                recv_message: function(recv) {
+                    const selectable = recv.user_id!=this.user_id;
+                    const comment = (recv.parent_message!=null && recv.parent_message!==undefined);
+                    if(recv.type=="MSG_ENTER") {
+                        
+                        if(recv.participants !== undefined && recv.participants != null && recv.participants.length>0) {
+                            this.users = recv.participants;
+                            this.user_count = recv.participants.length;
+                            Array.from(this.users).forEach(function(element) {
+                                vm.user_nicknames[element.id] = element.name;
+                            });
+                        }
+
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 참여하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                    } else if(recv.type=="MSG_QUIT") {
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 퇴장하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                        this.get_room_users();
+                    } else if(recv.type=="MSG_NOTI") {
+                        const nickname = '';
+                        const message = recv.message;
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": ''});
+                        this.get_room_users();
+                    } else {
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = recv.message;
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(comment) {
+                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": true, "comment_message": recv.parent_message.message});
+                        } else {
+                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": false, "comment_message": ''});
+                        }
+                        
+                        //this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": comment, "comment_message": recv.parent_message.message});
+                    }
+                    Vue.nextTick(() => {
+                        let messageDisplay = this.$refs.chatArea
+                        messageDisplay.scrollTop = messageDisplay.scrollHeight
+                    })
+                }
+            }
+        });
+    </script>
+  </body>
+</html>
