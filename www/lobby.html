@@ -22,60 +22,63 @@
                 <a class="btn btn-primary btn-sm" @click="logout">로그아웃</a>
             </div>
         </div>
-        <p>
-            <div class="input-group">
-                <div class="input-group-prepend">
-                    <label class="input-group-text">방(Room) 이름</label>
-                </div>
-                <input type="text" class="form-control" v-model="room_name" v-on:keyup.enter="createRoom">
-                <div class="input-group-prepend">
-                    <label class="input-group-text">참여자</label>
-                </div>
-                <input type="text" class="form-control" v-model="user_id" v-on:keyup.enter="find_user">
-                <div class="input-group-append">
-                    <button class="btn btn-primary" type="button" @click="find_user">방(Room) 사용자 초대하기</button>
-                </div>
-            </div>
-
-            <div class="input-group-lg">
-                <ul class="list-group">
-                    <label class="input-group-text">방(Room) 설명</label>
-                </ul>
-            </div>
-            <div class="input-group-lg">
-                <ul class="list-group">
-                    <input type="text" class="form-control" v-model="room_description">
-                </ul>
-            </div>
-            <div class="input-group-lg">
-                <ul class="list-group">
-                    <label class="input-group-text">방 참여자</label>
-                </ul>
-            </div>
-            <div class="input-group-lg">
-                <ul class="list-group">
-                    <li class="list-group-item list-group-item-action" v-for="item in users" v-bind:key="item.id">
-                        <h6>{{item.name}}</h6>
-                    </li>
-                </ul>
-            </div>
-        </p>
-        <p>
-        <div class="input-group">
-            <button class="btn btn-primary" type="button" @click="create_room">방(Room) 만들기</button>
-        </div>
-        </p>
-     
         <div class="row">
-            <div class="col-md-6">
-                <h3>방(Room) 목록</h3>
+            <ul class="col-md-10">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text">방(Room) 이름</label>
+                    </div>
+                    <input type="text" class="form-control" v-model="room_name">  
+                </div>
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text">방(Room) 설명</label>
+                    </div>
+                    <input type="text" class="form-control" v-model="room_description">
+                </div>                
+            </ul>
+            <div class="col-md-2">
+                <div class="input-group-lg">
+                    <label class="input-group-text">방(Room) 참여대상</label>
+                    <ul class="list-group">
+                        <li class="list-group-item list-group-item-action" v-for="item in users" v-bind:key="item.id">
+                            <h6>{{item.name}}</h6>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
-        <ul class="list-group">
-            <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.roomId" v-on:click="enter_room(item.id, item.name, item.description)">
-                <h6>{{item.name}}</h6>
-            </li>
-        </ul>
+        <div class="row">
+            <ul class="col-md-10">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text">참여자</label>
+                    </div>
+                    <input type="text" class="form-control" v-model="invite_user_id" v-on:keyup.enter="find_user">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="button" @click="find_user">방(Room) 사용자 초대하기</button>
+                    </div>
+                </div>
+            </ul>
+            <ul class="col-md-2">
+                <div class="input-group-lg">
+                    <button class="btn btn-primary" type="button" @click="create_room">방(Room) 만들기</button>
+                </div>
+            </ul>
+        </div>
+        <p>     
+            <div class="row">
+                <div class="col-md-6">
+                    <h3>방(Room) 목록</h3>
+                </div>
+            </div>
+            <ul class="list-group">
+                <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.roomId" v-on:click="enter_room(item.id, item.name, item.description)">
+                    <h6>{{item.name}}</h6>
+                </li>
+            </ul>
+        </p>
+
     </div>
     <!-- JavaScript -->
     <script src="/js/vue.min.js"></script>
@@ -83,8 +86,8 @@
     <script src="/js/sockjs.min.js"></script>
     <script src="/js/stomp.min.js"></script>
     <script>
-        var host = 'http://localhost:3030';
-        //var host = 'https://chat-api.seers-visual-system.link';
+        //var host = 'http://localhost:3030';
+        var host = 'https://chat-api.seers-visual-system.link';
         var chatRoom = new Vue({
             el: '#app',
             data: {
@@ -99,6 +102,7 @@
                 room_description : '',
                 users : [],
                 rooms: [],
+                invite_user_id: '',
                 after_reissue_func: null
             },
             created() {
@@ -210,11 +214,11 @@
                     );
                 },
                 find_user: function() {
-                    if("" === this.user_id) {
+                    if("" === this.invite_user_id) {
                         alert("사용자 아이디를 입력해주세요.");
                         return;
                     } else {
-                        axios.get(host + '/user/' + this.user_id, {
+                        axios.get(host + '/user/' + this.invite_user_id, {
                             headers : {
                                 'Content-Type' : 'application/json;charset=utf-8',
                                 'Authorization' : this.grant_type + ' ' + this.access_token
@@ -264,7 +268,7 @@
                         })
                         .then(
                             response => {
-                                alert(response.data.name+" room is created successfully.")
+                                alert(response.data.name+" 방생성이 완료되었습니다.")
                                 this.room_name = '';
                                 this.room_description = '';
                                 this.users = [];

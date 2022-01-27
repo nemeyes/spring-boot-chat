@@ -29,6 +29,12 @@ public class RedisChatMessage implements Serializable  {
 	@JsonProperty("message")
 	private String message;
 	
+	@JsonProperty("file_mime_type")
+	private String mimeType;
+	
+	@JsonProperty("file_download_path")
+	private String downloadPath;
+	
 	@JsonProperty("created_time")
 	private long createdTime;
 }
