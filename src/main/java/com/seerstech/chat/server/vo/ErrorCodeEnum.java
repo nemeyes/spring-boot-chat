@@ -85,4 +85,22 @@ public enum ErrorCodeEnum {
 			return "Refresh Token 정보가 일치하지 않습니다.";
 		}		
 	},	
+	CODE_ERROR_GET_FILE_CONTENT_TYPE {
+		@Override
+		public String toString() {
+			return "업로드한 파일의 MIME TYPE을 추출과정에서 오류가 발생했습니다.";
+		}		
+	},	
+	CODE_ERROR_COPY_FILE_TO_STORAGE {
+		@Override
+		public String toString() {
+			return "업로드한 파일 저장소에 복사하는 과정에서 오류가 발생했습니다.";
+		}		
+	},
+	CODE_ERROR_FILE_NOT_FOUND {
+		@Override
+		public String toString() {
+			return "파일을 찾을 수 없습니다.";
+		}		
+	},	
 }

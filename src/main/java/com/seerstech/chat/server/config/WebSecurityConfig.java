@@ -86,7 +86,8 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 			.antMatchers(HttpMethod.POST, "/user/reissue").permitAll()
 			.antMatchers(HttpMethod.POST, "/user/signup").authenticated()
 			//.antMatchers("/user/**").authenticated()
-			.antMatchers("/chat/**").authenticated()
+			.antMatchers(HttpMethod.POST, "/chat/**").authenticated()
+			.antMatchers(HttpMethod.GET, "/chat/download").permitAll()
 			.and()
 			.addFilterBefore(authTokenFilter(), UsernamePasswordAuthenticationFilter.class);
     	

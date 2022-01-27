@@ -33,6 +33,12 @@ public class ChatMessage {
 	
 	@JsonProperty("parent_message")
 	private ChatMessage parentMessage;
+	
+	@JsonProperty("file_mime_type")
+	private String mimeType;
+	
+	@JsonProperty("file_download_path")
+	private String downloadPath;
 		
 	@JsonProperty("created_time")
 	private long createdTime;
@@ -41,12 +47,14 @@ public class ChatMessage {
 	private List<ChatUser> participants;
 
     @Builder
-    public ChatMessage(String messageId, ChatMessageEnum messageType, String roomId, String userId, String message, long createdTime) {
-    	this.messageId = messageId;//UUID.randomUUID().toString();
+    public ChatMessage(String messageId, ChatMessageEnum messageType, String roomId, String userId, String message, String mimeType, String downloadPath, long createdTime) {
+    	this.messageId = messageId;
         this.type = messageType;
         this.roomId = roomId;
         this.userId = userId;
         this.message = message;
-        this.createdTime = createdTime;//TimeUtil.unixTime();
+        this.mimeType = mimeType;
+        this.downloadPath = downloadPath;
+        this.createdTime = createdTime;
     }
 }

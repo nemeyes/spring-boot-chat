@@ -33,7 +33,7 @@ public class JWTTokenProvider {
     
     private static final String AUTHORITIES_KEY = "auth";
     private static final String BEARER_TYPE = "Bearer";
-    private static final long ACCESS_TOKEN_EXPIRE_TIME = /*30*/1 * 60 * 1000L; //30분만 토큰 유효
+    private static final long ACCESS_TOKEN_EXPIRE_TIME = 30 * 60 * 1000L; //30분만 토큰 유효
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 10 * 24 * 60 * 60 * 1000L; //10일동안 토큰 유효 
     
     public JWTTokenInfo generateToken(Authentication auth) {
