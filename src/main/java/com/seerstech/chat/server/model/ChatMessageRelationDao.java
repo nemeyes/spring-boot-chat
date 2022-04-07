@@ -1,5 +1,6 @@
 package com.seerstech.chat.server.model;
 
+/*
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -21,3 +22,4 @@ public class ChatMessageRelationDao {
 	@JsonProperty("parent_message_id")
 	private String parentMessageId;
 }
+*/

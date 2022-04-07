@@ -4,7 +4,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.seerstech.chat.server.constant.ChatMessageEnum;
+import com.seerstech.chat.server.constant.ChatNotificationEnum;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -12,16 +13,19 @@ import lombok.Setter;
 @Getter
 @Setter
 @Document(collection = "ChatMessage")
-public class ChatMessageDao {
+public class ChatMessageDao extends BaseDao {
 	
 	@Id
 	private String id;
 	
-	@JsonProperty("message_id")
+	@Field("message_id")
 	private String messageId;
 	
 	@Field("type")
-	private ChatMessageEnum type; // 메시지 타입
+	private ChatMessageEnum type;
+	
+	@Field("ntype")
+	private ChatNotificationEnum nType;
 	
 	@Field("room_id")
 	private String roomId;
@@ -35,19 +39,30 @@ public class ChatMessageDao {
 	@Field("parent_message_id")
 	private String parentMessageId;
 	
+	@Field("file_mime_type")
+	private String mimeType;
+	
+	@Field("file_download_path")
+	private String downloadPath;
+	
+	/*
 	@Field("created_time")
 	private long createdTime;
+	
+	@Field("deleted_time")
+	private long deletedTime;
+	*/
 	
     public ChatMessageDao(String messageId, ChatMessageEnum type, 
     						String roomId, String userId, 
     						String message, String parentMessageId, 
-    						long ct) {
+    						long createdTime) {
     	this.messageId = messageId;
         this.type = type;
         this.roomId = roomId;
         this.userId = userId;
         this.message = message;
         this.parentMessageId = parentMessageId;
-        this.createdTime = ct;
+        this.createdTime = createdTime;
     }
 }

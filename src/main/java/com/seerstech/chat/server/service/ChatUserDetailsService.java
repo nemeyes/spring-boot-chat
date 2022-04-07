@@ -1,7 +1,7 @@
 package com.seerstech.chat.server.service;
 
+import com.seerstech.chat.server.constant.ChatRoleEnum;
 import com.seerstech.chat.server.model.ChatRoleDao;
-import com.seerstech.chat.server.model.ChatRoleEnum;
 import com.seerstech.chat.server.model.ChatUserDao;
 import com.seerstech.chat.server.repo.ChatRoleRepository;
 import com.seerstech.chat.server.repo.ChatUserRepository;

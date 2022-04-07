@@ -30,9 +30,11 @@ import javax.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 
 import com.seerstech.chat.server.vo.SignupRequest;
+import com.seerstech.chat.server.vo.SignupResponse;
 import com.seerstech.chat.server.vo.SuccessResponse;
+import com.seerstech.chat.server.vo.UpdateUserRequest;
+import com.seerstech.chat.server.vo.UpdateUserResponse;
 import com.seerstech.chat.server.vo.ChatUserResponse;
-import com.seerstech.chat.server.vo.ErrorCodeEnum;
 import com.seerstech.chat.server.vo.ErrorResponse;
 import com.seerstech.chat.server.vo.LoginResponse;
 import com.seerstech.chat.server.vo.LogoutRequest;
@@ -40,12 +42,13 @@ import com.seerstech.chat.server.vo.LogoutResponse;
 import com.seerstech.chat.server.vo.ReissueRequest;
 import com.seerstech.chat.server.vo.ReissueResponse;
 import com.seerstech.chat.server.vo.LoginRequest;
+import com.seerstech.chat.server.constant.ChatRoleEnum;
+import com.seerstech.chat.server.constant.ErrorCodeEnum;
 import com.seerstech.chat.server.jwt.JWTTokenInfo;
 import com.seerstech.chat.server.jwt.JWTTokenParser;
 import com.seerstech.chat.server.jwt.JWTTokenProvider;
 import com.seerstech.chat.server.repo.ChatRoleRepository;
 import com.seerstech.chat.server.model.ChatRoleDao;
-import com.seerstech.chat.server.model.ChatRoleEnum;
 import com.seerstech.chat.server.model.ChatUserDao;
 import com.seerstech.chat.server.service.ChatUserDetails;
 import com.seerstech.chat.server.service.ChatUserDetailsService;
@@ -121,7 +124,7 @@ public class UserController {
 		}
 		user.setUserRoles(roles); 
 		mChatUserService.saveChatUser(user);
-		return ResponseEntity.ok(new SuccessResponse("user registered successfully"));
+		return ResponseEntity.ok(new SignupResponse());
     }
     
     @PostMapping("/login")
@@ -207,36 +210,6 @@ public class UserController {
 				.refreshToken(jwt.getRefreshToken())
 				.refreshTokenExpirationTime(jwt.getRefreshTokenExpirationTime())
 				.build());
-		
-    	/*
-    	//ChatUserDao user = mChatUserService.findUserByUserId(req.getUserId());
-    	
-    	if(!mJWTTokenProvider.validateToken(req.getRefreshToken())) {
-    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_INVALID_REFRESH_TOKEN, ErrorCodeEnum.CODE_INVALID_REFRESH_TOKEN.toString()));
-    	}
-
-    	String refreshToken = mUserSessionInfos.get(CHAT_USER_SESSION_INFOS + req.getUserId());
-    	if(ObjectUtils.isEmpty(refreshToken)) {
-    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_INVALID_REQUEST, ErrorCodeEnum.CODE_INVALID_REQUEST.toString()));
-    	}
-    	
-    	if(!refreshToken.equals(req.getRefreshToken())) {
-    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_REFRESH_TOKEN_NOT_MATCH, ErrorCodeEnum.CODE_REFRESH_TOKEN_NOT_MATCH.toString()));
-    	}
-    	
-    	Authentication auth = mAuthManager.authenticate(new UsernamePasswordAuthenticationToken(user.getUserId(), "1111"));
-    	SecurityContextHolder.getContext().setAuthentication(auth);
-    	
-    	JWTTokenInfo jwt = mJWTTokenProvider.generateToken(auth);
-    	mUserSessionInfos.set(CHAT_USER_SESSION_INFOS + auth.getName(), jwt.getRefreshToken(), jwt.getRefreshTokenExpirationTime(), TimeUnit.MILLISECONDS);
-    
-		return ResponseEntity.ok(ReissueResponse.builder()
-				.grantType(jwt.getGrantType())
-				.accessToken(jwt.getAccessToken())
-				.refreshToken(jwt.getRefreshToken())
-				.refreshTokenExpirationTime(jwt.getRefreshTokenExpirationTime())
-				.build());
-		*/
     }
     
     
@@ -255,5 +228,28 @@ public class UserController {
     			return ResponseEntity.ok(new ChatUserResponse(user.getUserId(), user.getUserNickname()));
     		}
     	}
+    }
+    
+    @PostMapping("/update")
+    @ResponseBody
+    public ResponseEntity<?> update(@RequestHeader (name="Authorization") String token, @RequestBody UpdateUserRequest req) {
+    	
+    	if(req.getUserNickname()==null || req.getUserNickname().isEmpty()) {
+    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_INVALID_REQUEST, ErrorCodeEnum.CODE_INVALID_REQUEST.toString()));
+    	}
+    	
+    	String jwtToken = JWTTokenParser.parse(token);
+    	String userId = mJWTTokenProvider.getUserNameFromJwt(jwtToken);
+    	
+		ChatUserDao user = mChatUserService.findUserByUserId(userId);
+		if(user==null) {
+			return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_USER_NOT_FOUND, ErrorCodeEnum.CODE_USER_NOT_FOUND.toString()));
+		} else {
+			user.setUserNickname(req.getUserNickname());
+			mChatUserService.saveChatUser(user);
+			
+	    	UpdateUserResponse response = new UpdateUserResponse(user.getUserId(), user.getUserNickname());
+	    	return ResponseEntity.ok(response);	
+		}
     }
 }

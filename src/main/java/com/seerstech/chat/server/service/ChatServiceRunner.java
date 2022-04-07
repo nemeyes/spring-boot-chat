@@ -8,8 +8,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import com.seerstech.chat.server.constant.ChatRoleEnum;
 import com.seerstech.chat.server.model.ChatRoleDao;
-import com.seerstech.chat.server.model.ChatRoleEnum;
 import com.seerstech.chat.server.model.ChatUserDao;
 import com.seerstech.chat.server.repo.ChatRoleRepository;
 import com.seerstech.chat.server.utils.TimeUtil;

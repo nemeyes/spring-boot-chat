@@ -7,21 +7,25 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ChatRoomResponse extends SuccessResponse {
+public class ChatRoom {
 	
-	@JsonProperty("id")
+	@JsonProperty("room_id")
 	private String roomId;
 	
-	@JsonProperty("name")
+	@JsonProperty("room_name")
 	private String roomName;
 	
-	@JsonProperty("description")
+	@JsonProperty("room_description")
 	private String roomDescription;	
 	
-	public ChatRoomResponse(String id, String name, String description) {
+	@JsonProperty("room_unread_count")
+	private int messageCountUnread;
+	
+	public ChatRoom(String id, String name, String description, int messageCountUnread) {
 		this.roomId = id;
 		this.roomName = name;
 		this.roomDescription = description;
+		this.messageCountUnread = messageCountUnread;
 	}
 
 }

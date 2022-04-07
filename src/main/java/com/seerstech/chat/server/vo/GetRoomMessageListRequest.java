@@ -7,10 +7,16 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class InviteRoomRequest {
+public class GetRoomMessageListRequest {
+	
 	@JsonProperty("room_id")
 	private String roomId;
 	
-	@JsonProperty("user_id")
-	private String userId;
+	
+	@JsonProperty("page")
+	private int pageNumber;
+	
+	@JsonProperty("page_size")
+	private int pageSize;
+	
 }

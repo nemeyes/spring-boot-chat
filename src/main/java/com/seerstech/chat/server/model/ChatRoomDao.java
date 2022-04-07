@@ -10,7 +10,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Document(collection = "ChatRoom")
-public class ChatRoomDao {
+public class ChatRoomDao extends BaseDao {
 
 	@Id
 	private String id;
@@ -24,6 +24,8 @@ public class ChatRoomDao {
 	@Field("room_description")
 	private String roomDescription;
 	
+	/*
 	@Field("created_time")
 	private long createdTime;
+	*/
 }

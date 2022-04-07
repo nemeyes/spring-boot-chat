@@ -3,7 +3,7 @@ package com.seerstech.chat.server.redis;
 import java.io.Serializable;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.seerstech.chat.server.model.ChatMessageEnum;
+import com.seerstech.chat.server.constant.ChatMessageEnum;
 
 import lombok.Getter;
 import lombok.Setter;
