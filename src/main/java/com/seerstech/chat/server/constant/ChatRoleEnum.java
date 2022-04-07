@@ -1,4 +1,4 @@
-package com.seerstech.chat.server.model;
+package com.seerstech.chat.server.constant;
 
 public enum ChatRoleEnum {
 	ROLE_USER,

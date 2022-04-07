@@ -73,8 +73,8 @@
                 </div>
             </div>
             <ul class="list-group">
-                <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.roomId" v-on:click="enter_room(item.id, item.name, item.description)">
-                    <h6>{{item.name}}</h6>
+                <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.room_id" v-on:click="enter_room(item.room_id, item.room_name, item.room_description)">
+                    <h6>{{item.room_name}}   <span class="badge badge-info badge-pill">{{item.room_unread_count}}</span></h6>
                 </li>
             </ul>
         </p>
@@ -86,8 +86,8 @@
     <script src="/js/sockjs.min.js"></script>
     <script src="/js/stomp.min.js"></script>
     <script>
-        //var host = 'http://localhost:3030';
-        var host = 'https://chat-api.seers-visual-system.link';
+        var host = 'http://localhost:3030';
+        //var host = 'https://chat-api.seers-visual-system.link';
         var chatRoom = new Vue({
             el: '#app',
             data: {
@@ -190,16 +190,26 @@
                     );
                 },
                 get_rooms: function() {
-                    axios.get(host + '/chat/room', {
+                    var payload = {
+                        "page" : 1,
+                        "page_size": 100
+                    };
+                    axios.post(host + '/chat/rooms', JSON.stringify(payload), {
                         headers : {
                             'Content-Type' : 'application/json;charset=utf-8',
                             'Authorization' : this.grant_type + ' ' + this.access_token
                         }
                     })
                     .then(response => {
+
+                        if(response.data.code=="CODE_SUCCESS") {
+                            if(Object.prototype.toString.call(response.data.room_list) === "[object Array]")
+                            this.rooms = response.data.room_list;
+                        } else {
+                            alert(response.data.message); 
+                        }
                         // prevent html, allow json array
-                        if(Object.prototype.toString.call(response.data) === "[object Array]")
-                            this.rooms = response.data;
+                        
                     })
                     .catch( 
                         response => { 
@@ -228,8 +238,8 @@
                             
                             if(response.data.code=="CODE_SUCCESS") {
                                 var user = { 
-                                    "id" : response.data.id, 
-                                    "name" : response.data.nickname
+                                    "id" : response.data.user_id, 
+                                    "name" : response.data.user_nickname
                                 };
                                 this.users.push(user);
                             } else {
@@ -256,9 +266,9 @@
                     } else {
                         let ids = this.users.map(user => user.id);
                         var payload = {
-                            "name" : this.room_name,
-                            "description" : this.room_description,
-                            "participants" : ids
+                            "room_name" : this.room_name,
+                            "room_description" : this.room_description,
+                            "room_users" : ids
                         };
                         axios.post(host + '/chat/room/create', JSON.stringify(payload), {
                             headers : {
@@ -268,7 +278,7 @@
                         })
                         .then(
                             response => {
-                                alert(response.data.name+" 방생성이 완료되었습니다.")
+                                alert(response.data.room_name+" 방생성이 완료되었습니다.")
                                 this.room_name = '';
                                 this.room_description = '';
                                 this.users = [];

@@ -8,6 +8,8 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.SignatureException;
 import io.jsonwebtoken.UnsupportedJwtException;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,8 @@ import java.util.Date;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+import javax.annotation.Resource;
+
 @Slf4j
 @Component
 public class JWTTokenProvider {
@@ -33,8 +37,16 @@ public class JWTTokenProvider {
     
     private static final String AUTHORITIES_KEY = "auth";
     private static final String BEARER_TYPE = "Bearer";
-    private static final long ACCESS_TOKEN_EXPIRE_TIME = 30 * 60 * 1000L; //30분만 토큰 유효
+    //private static final long ACCESS_TOKEN_EXPIRE_TIME = 30 * 60 * 1000L; //30분만 토큰 유효
     private static final long REFRESH_TOKEN_EXPIRE_TIME = 10 * 24 * 60 * 60 * 1000L; //10일동안 토큰 유효 
+    
+    @Resource(name = "accessTokenExpTime")
+    private final long mAccessTokenExpTime;
+    
+    @Autowired
+    public JWTTokenProvider(long mAccessTokenExpTime) {
+		this.mAccessTokenExpTime = mAccessTokenExpTime;
+    }
     
     public JWTTokenInfo generateToken(Authentication auth) {
     	
@@ -44,7 +56,7 @@ public class JWTTokenProvider {
 
     	Date now = new Date();
     	//long now = (new Date()).getTime();
-    	Date accessTokenExpiresIn = new Date(now.getTime() + ACCESS_TOKEN_EXPIRE_TIME);
+    	Date accessTokenExpiresIn = new Date(now.getTime() + mAccessTokenExpTime);
     	String accessToken =  Jwts.builder()
     							.setSubject(auth.getName())
     							//.setIssuedAt(now)

@@ -11,12 +11,12 @@ import lombok.Setter;
 @Setter
 public class CreateRoomRequest {
 	
-	@JsonProperty("name")
+	@JsonProperty("room_name")
 	private String roomName;
 	
-	@JsonProperty("description")
+	@JsonProperty("room_description")
 	private String roomDescription;
 	
-	@JsonProperty("participants")
-	private List<String> participants;
+	@JsonProperty("room_users")
+	private List<String> roomUsers;
 }

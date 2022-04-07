@@ -9,10 +9,10 @@ import lombok.Setter;
 @Setter
 public class ChatUserResponse extends SuccessResponse {
 	
-	@JsonProperty("id")
+	@JsonProperty("user_id")
 	private String userId;
 	
-	@JsonProperty("nickname")
+	@JsonProperty("user_nickname")
 	private String userNickname;
 	
 	public ChatUserResponse(String id, String nickname) {

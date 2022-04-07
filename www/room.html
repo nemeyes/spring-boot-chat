@@ -133,14 +133,25 @@
             <ul class="col-md-10">
 
                 <section ref="chatArea" class="chat-area">
-                    <li v-for="message in messages" class="message" :class="{ 'message-out': message.user_id === user_id, 'message-in': message.user_id !== user_id }">
-                        <div><input  v-if="message.selectable" type="radio" :value="message.id" v-model="message_id"> {{message.nickname}} ({{message.timestamp}})</div>
-                        <div v-if="message.comment"><u>{{ message.comment_message }} 글에 대한 댓글입니다.</u></div>
-                        <div v-if="!message.bfile">{{ message.message }}</div>
-                        <div v-if="message.bfile">
-                            <img v-if="message.bimage" :src="message.download_path"/>
-                            <a v-if="!message.bimage" class="active" :href="message.download_path">다운로드</a>
+                    <li v-for="(message, index) in messages" class="message" :class="{ 'message-out': message.user_id === user_id, 'message-in': message.user_id !== user_id }">
+                        <div><input  type="radio" :value="message.id" v-model="message_id" @Click="set_message_index(index)"> {{message.nickname}} ({{message.timestamp}})</div>
+                        <div v-if="message.has_parent">
+                            <div v-if="!message.parent_has_file">
+                                <u>{{ message.parent_message }} 글에 대한 댓글입니다.</u>
+                            </div>
+                            <div v-if="message.parent_has_file">
+                                <img v-if="message.parent_is_image" :src="message.parent_download_path" width="50"/>
+                                <a v-if="!message.parent_is_image" class="active" :href="message.parent_download_path">다운로드</a>
+                                에 대한 댓글입니다.
+                            </div>
                         </div>
+                        <div v-if="!message.has_file">{{ message.message }}</div>
+                        <div v-if="message.has_file">
+                            <img v-if="message.is_image" :src="message.download_path"/>
+                            <a v-if="!message.is_image" class="active" :href="message.download_path">다운로드</a>
+                        </div>
+                        <div v-if="message.unread" style="display: flex; justify-content: flex-end"><div>읽지않음</div></div>
+                        <div v-if="message.unread_count>0" style="display: flex; justify-content: flex-end"><div>{{ message.unread_count }}</div></div>
                     </li>
                   </section>
             </ul> 
@@ -148,8 +159,8 @@
                 <div class="input-group-lg">
                     <label class="input-group-text">방(Room) 참여자</label>
                 </div>
-                <li class="list-group-item list-group-item-action" v-for="item in users" v-bind:key="item.id">
-                    <h6>{{item.name}}</h6>
+                <li class="list-group-item list-group-item-action" v-for="item in users" v-if="item.user_joined_room" v-bind:key="item.user_id">
+                    <h6>{{item.user_nickname}}</h6>
                 </li>
                 <div class="input-group-lg">
                     <a id="show-modal" class="input-group-text" @click="show_invite_user_modal = true">사용자 초대하기</a>
@@ -177,9 +188,13 @@
             </div>            
             <input type="text" class="form-control" v-model="message">
             <div class="input-group-lg">
-                <a class="btn btn-primary" @click="send_message('MSG_TALK')">메시지 보내기</a>
-                <a class="btn btn-info" @click="send_comment('MSG_TALK')">댓글달기</a>
-                <a class="btn btn-outline-danger" @click="show_send_file_modal = true">파일전송하기</a>
+                <a class="btn btn-primary" @click="send_message('MSG_TALK')">메시지</a>
+                <a class="btn btn-info" @click="send_comment('MSG_TALK')">댓글</a>
+                <a class="btn btn-outline-danger" @click="show_send_file_modal = true">파일</a>
+                <a class="btn btn-outline-danger" @click="show_send_comment_file_modal = true">파일댓글</a>
+                <a class="btn btn-outline-danger" @click="mark_as_read()">읽음</a>
+                <a class="btn btn-outline-danger" @click="delete_message()">삭제</a>
+                
             </div>
             <modal v-if="show_send_file_modal" @close="show_send_file_modal = false">
                 <h5 slot="header">파일 전송</h5>
@@ -192,7 +207,20 @@
                         <a class="btn btn-outline-danger" type="button" @click="show_send_file_modal = false">닫기</a>
                     </div>
                 </div>
-              </modal>
+            </modal>
+
+            <modal v-if="show_send_comment_file_modal" @close="show_send_comment_file_modal = false">
+                <h5 slot="header">댓글로 파일 전송</h5>
+                <div slot="body">
+                    <input type="file" @change="upload_file" ref="file"/>
+                </div>
+                <div slot="footer">
+                    <div class="input-group-lg">
+                        <a class="btn btn-primary" type="button" @click="submit_comment_file">전송하기</a>
+                        <a class="btn btn-outline-danger" type="button" @click="show_send_comment_file_modal = false">닫기</a>
+                    </div>
+                </div>
+            </modal>
 
         </div>
     </div>
@@ -231,8 +259,8 @@
     </script>
     <script>
         //var _this = null;
-        //var host = 'http://localhost:3030';
-        var host = 'https://chat-api.seers-visual-system.link';
+        var host = 'http://localhost:3030';
+        //var host = 'https://chat-api.seers-visual-system.link';
         var sock = new SockJS(host + "/seers");
         var ws = Stomp.over(sock);
         Vue.component('modal', {
@@ -259,12 +287,15 @@
                 access_token: '',
                 user_count: 0,
                 users : [],
+                all_users: [],
                 invite_user_id: '',
                 user_nicknames : null,
                 message_id: '',
+                message_index: -1,
                 after_reissue_func: null,
 
                 show_send_file_modal : false,
+                show_send_comment_file_modal: false,
 
                 files : null
             },
@@ -303,6 +334,9 @@
                 });
             },
             methods: {
+                set_message_index(index) {
+                    this.message_index = index;
+                },
                 upload_file() {
                     this.files = this.$refs.file.files[0];
                 },
@@ -330,6 +364,55 @@
                             if(response.response.status==401) {
                                 alert("토큰이 만료되어 재발급 합니다.");
                                 this.after_reissue_func = this.submit_file;
+                                this.reissue();
+                            } else {
+                                alert("파일업로드 과정에서 오류가 발생했습니다.");
+                            }
+                        } 
+                    );                    
+                },
+                submit_comment_file() {
+
+                    if(this.messages[this.message_index].type!="MSG_TALK" && 
+                       this.messages[this.message_index].type!="MSG_FILE") {
+                        alert("댓글은 메시지와 파일에 대해서만 가능합니다."); 
+                        return;
+                    }
+
+                    if(this.message_id==="") {
+                        alert("댓글달 메시지를 선택해주세요(라디오버튼 선택)."); 
+                        return;
+                    }
+                    if(this.messages[this.message_index].user_id==this.user_id) {
+                        alert("본인이 작성한 글에 댓글을 달수 없습니다."); 
+                        return;
+                    }
+
+
+                    const formData = new FormData();
+                    formData.append('file', this.files);
+                    formData.append('room_id', this.room_id);
+                    formData.append('user_id', this.user_id);
+                    formData.append('parent_message_id', this.message_id);
+                    const headers = { 'Content-Type': 'multipart/form-data' };
+                    axios.post(host + "/chat/upload/comment", formData, {
+                        headers : {
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        if(response.data.code=="CODE_SUCCESS") {
+                            
+                        } else {
+                            alert(response.data.message);
+                        }
+                        this.show_send_comment_file_modal = false;                        
+                    })
+                    .catch( 
+                        response => {
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.submit_comment_file;
                                 this.reissue();
                             } else {
                                 alert("파일업로드 과정에서 오류가 발생했습니다.");
@@ -422,13 +505,16 @@
                     .then(
                         response => {
                             if(response.data.code=="CODE_SUCCESS") {
-                                this.users = response.data.participants;
-                                this.user_count = response.data.participants.length;
+                                this.users = response.data.room_users;
+                                this.user_count = 0;
 
                                 Array.from(this.users).forEach(function(element) {
-                                    vm.user_nicknames[element.id] = element.name;
+                                    vm.user_nicknames[element.user_id] = element.user_nickname;
+                                    if(element.user_joined_room) {
+                                        vm.user_count++;
+                                    }
                                 });
-
+                                this.messages = []
                                 this.get_room_messages();
                             } else {
                                 alert(response.data.message); 
@@ -451,7 +537,9 @@
                 },
                 get_room_messages: function() {
                     var payload = {
-                        "room_id" : this.room_id
+                        "room_id" : this.room_id,
+                        "page" : 1,
+                        "page_size": 100
                     };
                     axios.post(host + '/chat/messages', JSON.stringify(payload), {
                         headers : {
@@ -462,7 +550,7 @@
                     .then(
                         response => {
                             if(response.data.code=="CODE_SUCCESS") {
-                                Array.from(response.data.messages).forEach(function(element) {
+                                Array.from(response.data.message_list).forEach(function(element) {
                                     vm.parse_room_message(element);
                                 });
 
@@ -552,58 +640,7 @@
                             } 
                         );
                     }
-                },
-                parse_room_message: function(recv) {
-                    const selectable = recv.user_id!=this.user_id;
-                    const comment = (recv.parent_message!=null && recv.parent_message!==undefined);
-                    if(recv.type=="MSG_ENTER") {
-                        if(recv.participants !== undefined && recv.participants != null && recv.participants.length>0) {
-                            this.users = recv.participants;
-                            this.user_count = recv.participants.length;
-                            Array.from(this.users).forEach(function(element) {
-                                vm.user_nicknames[element.id] = element.name;
-                            });
-                        }
-
-                        const nickname = this.user_nicknames[recv.user_id];
-                        const message = nickname + "님이 참여하였습니다.";
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                    } else if(recv.type=="MSG_QUIT") {
-                        const nickname = this.user_nicknames[recv.user_id];
-                        const message = nickname + "님이 퇴장하였습니다.";
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                    } else if(recv.type=="MSG_NOTI") {
-                        const nickname = '';
-                        const message = recv.message;
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                    } else if(recv.type=="MSG_FILE") {
-                        var bimage = false;
-                        if(recv.file_mime_type==="image/gif" || recv.file_mime_type==="image/png" || recv.file_mime_type==="image/jpeg") {
-                            bimage = true;
-                        }
-                        const nickname = this.user_nicknames[recv.user_id];
-                        const message = recv.message;
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": true, "bimage": bimage, "download_path": recv.file_download_path});
-                    } else {
-                        const nickname = this.user_nicknames[recv.user_id];
-                        const message = recv.message;
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        if(comment) {
-                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": true, "comment_message": recv.parent_message.message, "bfile": false, "bimage": false, "download_path": ''});
-                        } else {
-                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                        }
-                        
-                    }
-                    Vue.nextTick(() => {
-                        let messageDisplay = this.$refs.chatArea
-                        messageDisplay.scrollTop = messageDisplay.scrollHeight
-                    })
-                },                  
+                },              
                 send_message: function(type) {
                     if(this.message==="") {
                         alert("메세지를 입력해주세요."); 
@@ -612,68 +649,980 @@
                     ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message}));
                     this.message = '';
                 },
+                mark_as_read: function() {
+                    if(this.message_id==="") {
+                        alert("읽음으로 표시할 메시지를 선택해주세요(라디오버튼 선택)."); 
+                        return;
+                    }
+
+                    if(this.messages[this.message_index].user_id==this.user_id) {
+                        alert("본인이 작성한 글에 읽음표시를 할수 없습니다."); 
+                        return;
+                    }
+
+                    var payload = {
+                        "room_id" : this.room_id,
+                        "message_id" : this.message_id
+                    };
+                    axios.post(host + '/chat/message/read', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                            } else {
+                                alert(response.data.message);
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.mark_as_read;
+                                this.reissue();
+                            } else {
+                                alert("읽음으로 처리과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
+                },
                 send_comment: function(type) {
                     if(this.message==="") {
                         alert("메세지를 입력해주세요."); 
                         return;
                     }
+
+                    if(this.messages[this.message_index].type!="MSG_TALK" && 
+                       this.messages[this.message_index].type!="MSG_FILE") {
+                        alert("댓글은 메시지와 파일에 대해서만 가능합니다."); 
+                        return;
+                    }
+
                     if(this.message_id==="") {
                         alert("댓글달 메시지를 선택해주세요(라디오버튼 선택)."); 
                         return;
                     }
+                    if(this.messages[this.message_index].user_id==this.user_id) {
+                        alert("본인이 작성한 글에 댓글을 달수 없습니다."); 
+                        return;
+                    }
+
                     //alert(this.message_id);
                     ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message, parent_message_id:this.message_id}));
                     this.message = '';
+                },              
+                delete_message: function() {
+                    if(this.message_id==="") {
+                        alert("삭제할 메시지를 선택해주세요(라디오버튼 선택)."); 
+                        return;
+                    }
+                    if(this.messages[this.message_index].user_id!=this.user_id) {
+                        alert("본인이 작성한 글만 삭제가 가능합니다."); 
+                        return;
+                    }
+
+                    var payload = {
+                        "message_id" : this.message_id
+                    };
+                    axios.post(host + '/chat/message/delete', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                            } else {
+                                alert(response.data.message);
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.delete_message;
+                                this.reissue();
+                            } else {
+                                alert("메시지 삭제 과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
                 },
-                recv_message: function(recv) {
-                    const selectable = recv.user_id!=this.user_id;
-                    const comment = (recv.parent_message!=null && recv.parent_message!==undefined);
+                parse_room_message: function(recv) {
+                    const has_parent = (recv.parent_message!=null && recv.parent_message!==undefined);
                     if(recv.type=="MSG_ENTER") {
-                        
-                        if(recv.participants !== undefined && recv.participants != null && recv.participants.length>0) {
-                            this.users = recv.participants;
-                            this.user_count = recv.participants.length;
-                            Array.from(this.users).forEach(function(element) {
-                                vm.user_nicknames[element.id] = element.name;
-                            });
+                        if(recv.user_info !== undefined && recv.user_info != null) {
+                           this.user_count = 0;
+                           let found = false;
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_id==recv.user_info.user_id) {
+                                        found = true;
+                                        element.user_joined_room = true;
+                                    }
+                                });
+                            if(found==false) {
+                                this.users.push(recv.user_info);
+                            }
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_joined_room) {
+                                        vm.user_count++;
+                                    }
+                                });
+
+                           this.user_nicknames[recv.user_info.user_id] = recv.user_info.user_nickname;
                         }
 
                         const nickname = this.user_nicknames[recv.user_id];
                         const message = nickname + "님이 참여하였습니다.";
                         const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
+                        this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message":message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
                     } else if(recv.type=="MSG_QUIT") {
+                        
+                        if(recv.user_info !== undefined && recv.user_info != null) {
+                           this.user_count = 0;
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_id==recv.user_info.user_id) {
+                                        element.user_joined_room = false
+                                    }
+
+                                    if(element.user_joined_room) {
+                                        vm.user_count++;
+                                    }
+                                });
+                        }
+
                         const nickname = this.user_nicknames[recv.user_id];
                         const message = nickname + "님이 퇴장하였습니다.";
                         const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                        this.get_room_users();
+                        this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message":message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '',
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
                     } else if(recv.type=="MSG_NOTI") {
                         const nickname = '';
                         const message = recv.message;
                         const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": false, "bimage": false, "download_path": ''});
-                        this.get_room_users();
+                        if(recv.ntype=="NOTI_PLAIN_MESSAGE") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        } else if(recv.ntype=="NOTI_START_SECTION") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message + "[진료를 시작했습니다.]", 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        } else if(recv.ntype=="NOTI_END_SECTION") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message + "[진료를 종료했습니다.]", 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        }
+ 
+                    } else if(recv.type=="MSG_DELETE") {
+
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = "삭제된 메시지 입니다";
+
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(has_parent) {
+                            if(recv.parent_message.type=="MSG_FILE") {
+
+                                var parent_is_image = false;
+                                if(recv.parent_message.file_mime_type==="image/gif" || 
+                                   recv.parent_message.file_mime_type==="image/png" || 
+                                   recv.parent_message.file_mime_type==="image/jpeg") {
+                                    parent_is_image = true;
+                                 }
+
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": recv.parent_message.message, 
+                                                    "parent_has_file": true,
+                                                    "parent_is_image": parent_is_image,
+                                                    "parent_download_path": recv.parent_message.file_download_path,
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": false, 
+                                                    "unread_count": 0});
+                            } else {
+
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": recv.parent_message.message, 
+                                                    "parent_has_file": '',
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": false, 
+                                                    "unread_count": 0});
+                            }
+                        } else {
+                            this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": false, 
+                                                "parent_id": '',
+                                                "parent_message": '', 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": false, 
+                                                "is_image": false, 
+                                                "download_path": '', 
+                                                "unread": false, 
+                                                "unread_count": 0});
+                        }
+ 
                     } else if(recv.type=="MSG_FILE") {
-                        var bimage = false;
+
+                        var is_image = false;
                         if(recv.file_mime_type==="image/gif" || recv.file_mime_type==="image/png" || recv.file_mime_type==="image/jpeg") {
-                            bimage = true;
+                            is_image = true;
                         }
                         const nickname = this.user_nicknames[recv.user_id];
                         const message = recv.message;
+
+                        var unreadMe = false;
+                        var unreadCount = 0;
+                        let unreadUserIds = recv.unread_user_id_list;
+                        if(this.user_id==recv.user_id) {
+                            unreadCount = unreadUserIds.length;
+                        } else {
+                            Array.from(unreadUserIds).forEach(function(element) {
+                                if(vm.user_id==element) {
+                                    unreadMe = true;
+                                }
+                            });
+                        }
+
                         const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":false, "comment": false, "comment_message": '', "bfile": true, "bimage": bimage, "download_path": recv.file_download_path});
+
+                        if(has_parent) {
+                            if(recv.parent_message.type=="MSG_DELETE") {
+
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": "삭제된 메시지",
+                                                    "parent_has_file": false,
+                                                    "parent_is_image": false,
+                                                    "parent_download_path": '',
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+
+                            } else if(recv.parent_message.type=="MSG_FILE") {
+                                var parent_is_image = false;
+                                if(recv.parent_message.file_mime_type==="image/gif" || 
+                                    recv.parent_message.file_mime_type==="image/png" || 
+                                    recv.parent_message.file_mime_type==="image/jpeg") {
+                                    parent_is_image = true;
+                                }
+
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": '', 
+                                                "parent_has_file": true,
+                                                "parent_is_image": parent_is_image,
+                                                "parent_download_path": recv.parent_message.file_download_path,
+                                                "has_file": true, 
+                                                "is_image": is_image, 
+                                                "download_path": recv.file_download_path, 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            } else {
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": recv.parent_message.message, 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": true, 
+                                                "is_image": is_image, 
+                                                "download_path": recv.file_download_path, 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            }
+
+                        } else {
+                            this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": false, 
+                                                "parent_id": '',
+                                                "parent_message": '', 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": true, 
+                                                "is_image": is_image, 
+                                                "download_path": recv.file_download_path, 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+                        }
                     } else {
                         const nickname = this.user_nicknames[recv.user_id];
                         const message = recv.message;
-                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
-                        if(comment) {
-                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": true, "comment_message": recv.parent_message.message, "bfile": false, "bimage": bimage, "download_path": ''});
+
+                        var unreadMe = false;
+                        var unreadCount = 0;
+                        let unreadUserIds = recv.unread_user_id_list;
+                        if(this.user_id==recv.user_id) {
+                            unreadCount = unreadUserIds.length;
                         } else {
-                            this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": false, "comment_message": '', "bfile": false, "bimage": bimage, "download_path": ''});
+                            Array.from(unreadUserIds).forEach(function(element) {
+                                if(vm.user_id==element) {
+                                    unreadMe = true;
+                                }
+                            });
+                        }
+
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(has_parent) {
+                            if(recv.parent_message.type=="MSG_DELETE") {
+
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": '"삭제된 메시지"',
+                                                    "parent_has_file": false,
+                                                    "parent_is_image": false,
+                                                    "parent_download_path": '',
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+
+                            } else if(recv.parent_message.type=="MSG_FILE") {
+
+                                var parent_is_image = false;
+                                if(recv.parent_message.file_mime_type==="image/gif" || 
+                                    recv.parent_message.file_mime_type==="image/png" || 
+                                    recv.parent_message.file_mime_type==="image/jpeg") {
+                                    parent_is_image = true;
+                                }
+
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": '',
+                                                    "parent_has_file": true,
+                                                    "parent_is_image": parent_is_image,
+                                                    "parent_download_path": recv.parent_message.file_download_path,
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+                            
+                            } else {
+                            
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": recv.parent_message.message, 
+                                                    "parent_has_file": false,
+                                                    "parent_is_image": false,
+                                                    "parent_download_path": '',
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+                            
+                            }
+                        
+                        } else {
+                            
+                            this.messages.push({"id": recv.message_id, 
+                                                "type": recv.type, 
+                                                "user_id": recv.user_id, 
+                                                "nickname": nickname, 
+                                                "message": message, 
+                                                "timestamp": timestamp, 
+                                                "has_parent": false, 
+                                                "parent_id": '',
+                                                "parent_message": '', 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": false, 
+                                                "is_image": false, 
+                                                "download_path": '', 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+                        
                         }
                         
-                        //this.messages.push({"id": recv.message_id, "type":recv.type, "user_id":recv.user_id, "nickname":nickname, "message":message, "timestamp":timestamp, "selectable":selectable, "comment": comment, "comment_message": recv.parent_message.message});
+                    }
+                    Vue.nextTick(() => {
+                        let messageDisplay = this.$refs.chatArea
+                        messageDisplay.scrollTop = messageDisplay.scrollHeight
+                    })
+                },                      
+                recv_message: function(recv) {
+                    const has_parent = (recv.parent_message!=null && recv.parent_message!==undefined);
+                    if(recv.type=="MSG_ENTER") {
+
+                        if(recv.user_info !== undefined && recv.user_info != null) {
+                           this.user_count = 0;
+                           let found = false;
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_id==recv.user_info.user_id) {
+                                        found = true;
+                                        element.user_joined_room = false
+                                    }
+                                });
+                            if(found==false) {
+                                this.users.push(recv.user_info);
+                            }
+
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_joined_room) {
+                                        vm.user_count++;
+                                    }
+                                });
+
+                           this.user_nicknames[recv.user_info.user_id] = recv.user_info.user_nickname;
+                        }
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 참여하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message":message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+                    
+                    } else if(recv.type=="MSG_QUIT") {
+
+                        if(recv.user_info !== undefined && recv.user_info != null) {
+                           this.user_count = 0;
+                           Array.from(this.users).forEach(function(element) {
+                                    if(element.user_id==recv.user_info.user_id) {
+                                        element.user_joined_room = false
+                                    }
+
+                                    if(element.user_joined_room) {
+                                        vm.user_count++;
+                                    }
+                                });
+                        }
+
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = nickname + "님이 퇴장하였습니다.";
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message":message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+                    
+                    } else if(recv.type=="MSG_NOTI") {
+                    
+                        //const nickname = '';
+                        //const message = recv.message;
+                        //const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        const nickname = '';
+                        const message = recv.message;
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(recv.ntype=="NOTI_PLAIN_MESSAGE") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        } else if(recv.ntype=="NOTI_START_SECTION") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message + "[진료를 시작했습니다.]", 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        } else if(recv.ntype=="NOTI_END_SECTION") {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message": message + "[진료를 종료했습니다.]", 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": false, 
+                                            "is_image": false, 
+                                            "download_path": '', 
+                                            "unread": false, 
+                                            "unread_count": 0});
+
+                        }
+                    
+                    } else if(recv.type=="MSG_READ") {
+
+                        this.messages.forEach(function(message, index) {
+                            if(message.id==recv.message_id) {
+
+                                var unreadMe = false;
+                                var unreadCount = 0;
+                                let unreadUserIds = recv.unread_user_id_list;
+                                if(vm.user_id==recv.user_id) {
+                                    unreadCount = unreadUserIds.length;
+                                    vm.messages[index].unread_count = unreadCount;
+                                } else {
+                                    Array.from(unreadUserIds).forEach(function(element) {
+                                        if(vm.user_id==element) {
+                                            unreadMe = true;
+                                        }
+                                    });
+                                    vm.messages[index].unread = unreadMe;
+                                }
+                                return;
+                            }
+                        });
+
+                    } else if(recv.type=="MSG_DELETE") {
+
+                        this.messages.forEach(function(message, index) {
+                            if(message.id==recv.message_id) {
+                                vm.messages[index].type = recv.type;
+                                vm.messages[index].message = '"삭제된 메시지"';
+                                vm.messages[index].has_file = false;
+                                vm.messages[index].is_image = false;
+                                vm.messages[index].download_path =  '';
+                                vm.messages[index].unread = false;
+                                vm.messages[index].unread_count = 0;
+                                return;
+                            }
+                        });
+                    } else if(recv.type=="MSG_PARENT_DELETE") {
+
+                        this.messages.forEach(function(message, index) {
+                            if(message.parent_id==recv.parent_message_id) {
+                                vm.messages[index].parent_message = '"삭제된 메시지"';
+                                vm.messages[index].parent_has_file = false;
+                                vm.messages[index].parent_is_image = false;
+                                vm.messages[index].parent_download_path = '';
+                                vm.messages[index].unread = false;
+                                vm.messages[index].unread_count = 0;
+                                return;
+                            }
+                        });
+
+                    } else if(recv.type=="MSG_ROOM_DELETE") {
+                        location.href = lobby.html;
+                    } else if(recv.type=="MSG_FILE") {
+                        var is_image = false;
+                        if(recv.file_mime_type==="image/gif" || recv.file_mime_type==="image/png" || recv.file_mime_type==="image/jpeg") {
+                            is_image = true;
+                        }
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = recv.message;
+
+                        var unreadMe = false;
+                        var unreadCount = 0;
+                        let unreadUserIds = recv.unread_user_id_list;
+                        if(this.user_id==recv.user_id) {
+                            unreadCount = unreadUserIds.length;
+                        } else {
+                            Array.from(unreadUserIds).forEach(function(element) {
+                                if(vm.user_id==element) {
+                                    unreadMe = true;
+                                }
+                            });
+                        }
+
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        
+                        if(has_parent) {
+                            if(recv.parent_message.type=="MSG_DELETE") {
+                                
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": '"삭제된 메시지"',
+                                                    "parent_has_file": false,
+                                                    "parent_is_image": false,
+                                                    "parent_download_path": '',
+                                                    "has_file": true, 
+                                                    "is_image": is_image, 
+                                                    "download_path": recv.file_download_path, 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+
+                            } else if(recv.parent_message.type=="MSG_FILE") {
+                                var parent_is_image = false;
+                                if(recv.parent_message.file_mime_type==="image/gif" || 
+                                    recv.parent_message.file_mime_type==="image/png" || 
+                                    recv.parent_message.file_mime_type==="image/jpeg") {
+                                    parent_is_image = true;
+                                }
+
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": '', 
+                                                "parent_has_file": true,
+                                                "parent_is_image": parent_is_image,
+                                                "parent_download_path": recv.parent_message.file_download_path,
+                                                "has_file": true, 
+                                                "is_image": is_image, 
+                                                "download_path": recv.file_download_path, 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            } else {
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": recv.parent_message.message, 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": true, 
+                                                "is_image": is_image, 
+                                                "download_path": recv.file_download_path, 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            }
+                        } else {
+
+                            this.messages.push({"id": recv.message_id, 
+                                            "type":recv.type, 
+                                            "user_id":recv.user_id, 
+                                            "nickname":nickname, 
+                                            "message":message, 
+                                            "timestamp":timestamp, 
+                                            "has_parent": false,
+                                            "parent_id": '', 
+                                            "parent_message": '', 
+                                            "parent_has_file": false,
+                                            "parent_is_image": false,
+                                            "parent_download_path": '',
+                                            "has_file": true, 
+                                            "is_image": is_image, 
+                                            "download_path": recv.file_download_path, 
+                                            "unread": unreadMe, 
+                                            "unread_count": unreadCount});
+                        }
+
+                    } else {
+                        const nickname = this.user_nicknames[recv.user_id];
+                        const message = recv.message;
+
+                        var unreadMe = false;
+                        var unreadCount = 0;
+                        let unreadUserIds = recv.unread_user_id_list;
+                        if(this.user_id==recv.user_id) {
+                            unreadCount = unreadUserIds.length;
+                        } else {
+                            Array.from(unreadUserIds).forEach(function(element) {
+                                if(vm.user_id==element) {
+                                    unreadMe = true;
+                                }
+                            });
+                        }
+
+                        const timestamp = new Date(recv.created_time).toLocaleDateString("euc-KR") + " " + new Date(recv.created_time).toLocaleTimeString("euc-KR");
+                        if(has_parent) {
+
+                            if(recv.parent_message.type=="MSG_DELETE") {
+                                
+                                this.messages.push({"id": recv.message_id, 
+                                                    "type":recv.type, 
+                                                    "user_id":recv.user_id, 
+                                                    "nickname":nickname, 
+                                                    "message":message, 
+                                                    "timestamp":timestamp, 
+                                                    "has_parent": true, 
+                                                    "parent_id": recv.parent_message.message_id,
+                                                    "parent_message": '"삭제된 메시지"',
+                                                    "parent_has_file": false,
+                                                    "parent_is_image": false,
+                                                    "parent_download_path": '',
+                                                    "has_file": false, 
+                                                    "is_image": false, 
+                                                    "download_path": '', 
+                                                    "unread": unreadMe, 
+                                                    "unread_count": unreadCount});
+
+                            } else if(recv.parent_message.type=="MSG_FILE") {
+                                var parent_is_image = false;
+                                if(recv.parent_message.file_mime_type==="image/gif" || 
+                                    recv.parent_message.file_mime_type==="image/png" || 
+                                    recv.parent_message.file_mime_type==="image/jpeg") {
+                                    parent_is_image = true;
+                                }
+
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": '', 
+                                                "parent_has_file": true,
+                                                "parent_is_image": parent_is_image,
+                                                "parent_download_path": recv.parent_message.file_download_path,
+                                                "has_file": false, 
+                                                "is_image": false, 
+                                                "download_path": '', 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            } else {
+                                this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": true, 
+                                                "parent_id": recv.parent_message.message_id,
+                                                "parent_message": recv.parent_message.message, 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": false, 
+                                                "is_image": false, 
+                                                "download_path": '', 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+
+                            }
+                            
+                        } else {
+                        
+                            this.messages.push({"id": recv.message_id, 
+                                                "type":recv.type, 
+                                                "user_id":recv.user_id, 
+                                                "nickname":nickname, 
+                                                "message":message, 
+                                                "timestamp":timestamp, 
+                                                "has_parent": false,
+                                                "parent_id": '', 
+                                                "parent_message": '', 
+                                                "parent_has_file": false,
+                                                "parent_is_image": false,
+                                                "parent_download_path": '',
+                                                "has_file": false, 
+                                                "is_image": false, 
+                                                "download_path": '', 
+                                                "unread": unreadMe, 
+                                                "unread_count": unreadCount});
+                        
+                        }
                     }
                     Vue.nextTick(() => {
                         let messageDisplay = this.$refs.chatArea

@@ -2,8 +2,11 @@ package com.seerstech.chat.server.vo;
 
 import java.util.List;
 
+import org.springframework.data.mongodb.core.mapping.Field;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.seerstech.chat.server.model.ChatMessageEnum;
+import com.seerstech.chat.server.constant.ChatMessageEnum;
+import com.seerstech.chat.server.constant.ChatNotificationEnum;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -18,6 +21,9 @@ public class ChatMessage {
 	
 	@JsonProperty("type")
 	private ChatMessageEnum type; // 메시지 타입
+	
+	@Field("ntype")
+	private ChatNotificationEnum nType;
 	
 	@JsonProperty("room_id")
 	private String roomId;
@@ -43,8 +49,11 @@ public class ChatMessage {
 	@JsonProperty("created_time")
 	private long createdTime;
 	
-	@JsonProperty("participants")
-	private List<ChatUser> participants;
+	@JsonProperty("user_info")
+	private ChatRoomUser userInfo;
+	
+	@JsonProperty("unread_user_id_list")
+	private List<String> unreadUserIdList;
 
     @Builder
     public ChatMessage(String messageId, ChatMessageEnum messageType, String roomId, String userId, String message, String mimeType, String downloadPath, long createdTime) {

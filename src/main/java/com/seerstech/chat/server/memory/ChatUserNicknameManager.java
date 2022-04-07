@@ -2,6 +2,7 @@ package com.seerstech.chat.server.memory;
 
 import java.util.Hashtable;
 
+/*
 public class ChatUserNicknameManager {
 
 	private static ChatUserNicknameManager mInstance;
@@ -55,3 +56,4 @@ public class ChatUserNicknameManager {
     	}
     }
 }
+*/

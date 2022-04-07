@@ -9,16 +9,15 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ChatUser {
-	@JsonProperty("id")
-	private String id;
+	@JsonProperty("user_id")
+	private String userId;
 
-	@JsonProperty("name")
-	private String name;
+	@JsonProperty("user_nickname")
+	private String userNickname;
 	
     @Builder
-    public ChatUser(String userId, String userNickname) {
-    	this.id = userId;
-    	this.name = userNickname;
+    public ChatUser(String userId, String userNickname, boolean isJoined) {
+    	this.userId = userId;
+    	this.userNickname = userNickname;
     }
-	
 }

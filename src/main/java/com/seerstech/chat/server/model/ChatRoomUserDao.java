@@ -9,8 +9,8 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@Document(collection = "ChatParticipant")
-public class ChatParticipantDao {
+@Document(collection = "ChatRoomUser")
+public class ChatRoomUserDao extends BaseDao {
 
 	@Id
 	private String id;
@@ -20,8 +20,15 @@ public class ChatParticipantDao {
 	
 	@Field("user_id")
     private String userId;
+	
+	@Field("user_joined_room")
+	private Boolean userJoinedRoom;
 
+	/*
 	@Field("created_time")
 	private long createdTime;
 	
+	@Field("deleted_time")
+	private long deletedTime;
+	*/
 }
