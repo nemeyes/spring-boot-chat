@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>씨어스테크</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <style>
+      [v-cloak] {
+          display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container" id="app" v-cloak>
+        <div class="row">
+            <div class="col-md-6">
+                <h3>관리자</h3>
+            </div>
+            <div class="col-md-6 text-right">
+                <a class="btn btn-primary btn-sm" href="admin.html">관리자 메인으로 이동</a>
+            </div>
+        </div>
+        <p>
+        <div class="row">
+            <div class="col-md-6">
+                <h5>알림 목록</h5>
+            </div>
+        </div>
+
+        <ul class="list-group">
+            <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.id">
+                <div><input  type="radio" :value="item.id" v-model="room_id">  {{item.name}} </div>
+            </li>
+        </ul>
+        <p>
+        <div class="input-group">
+            <div class="input-group-lg">
+                <a class="btn btn-primary btn-sm" @click="get_notifies()">방알림조회</a>
+            </div>
+        </div>
+        
+        <ul class="list-group">
+            <li class="list-group-item list-group-item-action" v-for="item in notifies" v-bind:key="item.id">
+                <div v-if="item.ntype=='NOTI_PLAIN_MESSAGE'">
+                    <h6><u>일반 알림</u> {{item.message}}</h6>
+                </div>
+                <div v-if="item.ntype=='NOTI_START_SECTION'">
+                    <h6><u>진료시작 알림</u> {{item.message}} <button class="btn btn-primary btn-sm" type="button" @click="delete_section(item.message_id)">다음 진료종료 알림까지 글모두 삭제</button> </h6>
+                </div>
+                <div v-if="item.ntype=='NOTI_END_SECTION'">
+                    <h6><u>진료종료 알림</u> {{item.message}}</h6>
+                </div>
+               
+            </li>
+        </ul>
+        </p>
+        </p>
+
+    </div>
+    <!-- JavaScript -->
+    <script src="/js/vue.min.js"></script>
+    <script src="/js/axios.min.js"></script>
+    <script src="/js/sockjs.min.js"></script>
+    <script src="/js/stomp.min.js"></script>
+    <script>
+        var host = 'http://localhost:3030';
+        //var host = 'https://chat-api.seers-visual-system.link';
+        var admin = new Vue({
+            el: '#app',
+            data: {
+                gran_type : '',
+                access_token : '',
+                refresh_token : '',
+                refresh_token_expiration_time : '',
+                user_id : '',
+                user_nickname : '',
+                user_role : '',
+                room_notification : '',
+                rooms: [],
+                room_id: '',
+                notifies: [],
+            },
+            created() {
+                this.grant_type = localStorage.getItem('seerschat.grant_type');
+                this.access_token = localStorage.getItem('seerschat.access_token');
+                this.refresh_token = localStorage.getItem('seerschat.refresh_token');
+				this.refresh_token_exp_time = localStorage.getItem('seerschat.refresh_token_expiration_time');
+				this.user_id = localStorage.getItem('seerschat.user_id');
+				this.user_nickname = localStorage.getItem('seerschat.user_nickname');
+				this.user_role = localStorage.getItem('seerschat.user_role');
+
+                this.get_rooms();
+            },
+            methods: {
+                reissue: function() {
+                    var payload = {
+                        "access_token" : this.access_token,
+                        "refresh_token" : this.refresh_token
+                    };
+
+                    axios.post(host + '/user/reissue', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        if(response.data.code=="CODE_SUCCESS") {
+                            this.grant_type = response.data.grant_type;
+                            this.access_token = response.data.access_token;
+                            this.refresh_token = response.data.refresh_token;
+                            this.refresh_token_exp_time = response.data.refresh_token_exiration_time;
+
+                            localStorage.setItem('seerschat.grant_type', this.grant_type);
+                            localStorage.setItem('seerschat.access_token', this.access_token);
+                            localStorage.setItem('seerschat.refresh_token', this.refresh_token);
+                            localStorage.setItem('seerschat.refresh_token_expiration_time', this.refresh_token_exp_time);
+
+                            //this.get_rooms();
+                            if(this.after_reissue_func!=null && this.after_reissue_func!==undefined) {
+                                this.after_reissue_func();
+                            }
+                        } else {
+                            alert("토큰 재발급 과정에서 실패했습니다."); 
+                        }
+                    })
+                    .catch( 
+                        response => {
+                            alert("토큰 재발급 과정에서 오류가 발생했습니다."); 
+                        } 
+                    );
+                },                
+                get_rooms: function() {
+                    axios.get(host + '/chat/room', {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(response => {
+                        // prevent html, allow json array
+                        if(Object.prototype.toString.call(response.data) === "[object Array]")
+                            this.rooms = response.data;
+                    })
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.get_rooms;
+                                this.reissue();
+                            } else {
+                                alert("방(Room)목록을 가져오는 과정에서 오류가 발생했습니다.");
+                            }
+                        } 
+                    );
+                },
+                get_notifies: function() {
+
+                    if(null == this.room_id) {
+                        alert("목록을 가져올 방을 선택해주세요.");
+                        return;
+                    }
+                    var payload = {
+                        "room_id" : this.room_id
+                    };
+                    axios.post(host + '/chat/room/notifies', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                                this.notifies = response.data.notify_list;
+                            } else {
+
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.notify_message;
+                                this.reissue();
+                            } else {
+                                alert("알림목록을 조회하는 과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
+
+                },
+                delete_section: function(message_id) {
+                    if(null == message_id) {
+                        alert("메시지 선택을 해주세요.");
+                        return;
+                    }
+                    if(null == this.room_id) {
+                        alert("삭제할 메시지가 있는 방을 선택해주세요.");
+                        return;
+                    }
+                    var payload = {
+                        "room_id" : this.room_id,
+                        "message_id": message_id
+                    };
+                    axios.post(host + '/chat/room/section/delete', JSON.stringify(payload), {
+                        headers : {
+                            'Content-Type' : 'application/json;charset=utf-8',
+                            'Authorization' : this.grant_type + ' ' + this.access_token
+                        }
+                    })
+                    .then(
+                        response => {
+                            if(response.data.code=="CODE_SUCCESS") {
+                                
+                            } else {
+
+                            }
+                        }
+                    )
+                    .catch( 
+                        response => { 
+                            if(response.response.status==401) {
+                                alert("토큰이 만료되어 재발급 합니다.");
+                                this.after_reissue_func = this.notify_message;
+                                this.reissue();
+                            } else {
+                                alert("알림목록을 조회하는 과정에서 오류가 발생했습니다."); 
+                            }
+                        } 
+                    );
+                }
+            }
+        });
+           
+    </script>
+  </body>
+</html>
