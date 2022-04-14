@@ -845,7 +845,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message, 
+                                            "message": "[알림] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -865,7 +865,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message + "[진료를 시작했습니다.]", 
+                                            "message": "[진료를 시작했습니다] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -885,7 +885,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message + "[진료를 종료했습니다.]", 
+                                            "message": "[진료를 종료했습니다] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -1295,7 +1295,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message, 
+                                            "message": "[알림] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -1315,7 +1315,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message + "[진료를 시작했습니다.]", 
+                                            "message": "[진료를 시작했습니다] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -1335,7 +1335,7 @@
                                             "type":recv.type, 
                                             "user_id":recv.user_id, 
                                             "nickname":nickname, 
-                                            "message": message + "[진료를 종료했습니다.]", 
+                                            "message": "[진료를 종료했습니다] " + message, 
                                             "timestamp":timestamp, 
                                             "has_parent": false,
                                             "parent_id": '', 
@@ -1398,7 +1398,6 @@
                                 vm.messages[index].parent_download_path = '';
                                 vm.messages[index].unread = false;
                                 vm.messages[index].unread_count = 0;
-                                return;
                             }
                         });
 
