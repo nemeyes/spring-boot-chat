@@ -30,8 +30,8 @@
         </div>
 
         <ul class="list-group">
-            <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.id">
-                <div><input  type="radio" :value="item.id" v-model="room_id">  {{item.name}} </div>
+            <li class="list-group-item list-group-item-action" v-for="item in rooms" v-bind:key="item.room_id">
+                <div><input  type="radio" :value="item.room_id" v-model="room_id">  {{item.room_name}} </div>
             </li>
         </ul>
         <p>
@@ -133,16 +133,23 @@
                     );
                 },                
                 get_rooms: function() {
-                    axios.get(host + '/chat/room', {
+                    var payload = {
+                        "page" : 1,
+                        "page_size": 100
+                    };
+                    axios.post(host + '/chat/rooms', JSON.stringify(payload), {
                         headers : {
                             'Content-Type' : 'application/json;charset=utf-8',
                             'Authorization' : this.grant_type + ' ' + this.access_token
                         }
                     })
                     .then(response => {
-                        // prevent html, allow json array
-                        if(Object.prototype.toString.call(response.data) === "[object Array]")
-                            this.rooms = response.data;
+                        if(response.data.code=="CODE_SUCCESS") {
+                            if(Object.prototype.toString.call(response.data.room_list) === "[object Array]")
+                            this.rooms = response.data.room_list;
+                        } else {
+                            alert(response.data.message); 
+                        }
                     })
                     .catch( 
                         response => { 
