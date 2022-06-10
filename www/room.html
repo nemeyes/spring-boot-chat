@@ -134,7 +134,12 @@
 
                 <section ref="chatArea" class="chat-area">
                     <li v-for="(message, index) in messages" class="message" :class="{ 'message-out': message.user_id === user_id, 'message-in': message.user_id !== user_id }">
-                        <div><input  type="radio" :value="message.id" v-model="message_id" @Click="set_message_index(index)"> {{message.nickname}} ({{message.timestamp}})</div>
+                        <div v-if="message.user_id === user_id">
+                            <input  type="radio" :value="message.id" v-model="message_id" @Click="set_message_index(index)"> {{message.nickname}} ({{message.timestamp}})
+                        </div>
+                        <div v-if="message.user_id !== user_id">
+                            <input  type="checkbox" :value="message.id" v-model="message_ids" @Click="set_message_index(index)"> {{message.nickname}} ({{message.timestamp}})
+                        </div>
                         <div v-if="message.has_parent">
                             <div v-if="!message.parent_has_file">
                                 <u>{{ message.parent_message }} 글에 대한 댓글입니다.</u>
@@ -259,8 +264,11 @@
     </script>
     <script>
         //var _this = null;
-        var host = 'http://localhost:3030';
-        //var host = 'https://chat-api.seers-visual-system.link';
+        //var host = 'http://localhost:3030';
+        var host = 'https://chat-api.seers-visual-system.link';
+        //var host = 'https://chat-api-dev.seers-visual-system.link';
+        //var host = 'http://3.38.246.104';
+        //var host = 'http://3.38.246.104:3030';
         var sock = new SockJS(host + "/seers");
         var ws = Stomp.over(sock);
         Vue.component('modal', {
@@ -291,6 +299,7 @@
                 invite_user_id: '',
                 user_nicknames : null,
                 message_id: '',
+                message_ids: [],
                 message_index: -1,
                 after_reissue_func: null,
 
@@ -345,9 +354,12 @@
                     formData.append('file', this.files);
                     formData.append('room_id', this.room_id);
                     formData.append('user_id', this.user_id);
-                    const headers = { 'Content-Type': 'multipart/form-data' };
+                    //const headers = { 'Content-Type': 'multipart/form-data' };
                     axios.post(host + "/chat/upload", formData, {
                         headers : {
+                            'Content-Type': 'multipart/form-data',
+                            'Access-Control-Allow-Origin': '*',
+                            'Access-Control-Allow-Headers': '*',
                             'Authorization' : this.grant_type + ' ' + this.access_token
                         }
                     })
@@ -373,14 +385,19 @@
                 },
                 submit_comment_file() {
 
+                    if(this.message_ids.length>1) {
+                        alert("댓글로 파일전송시에는 메시지 하나만 선택해주세요."); 
+                        return;
+                    }
+
                     if(this.messages[this.message_index].type!="MSG_TALK" && 
                        this.messages[this.message_index].type!="MSG_FILE") {
                         alert("댓글은 메시지와 파일에 대해서만 가능합니다."); 
                         return;
                     }
 
-                    if(this.message_id==="") {
-                        alert("댓글달 메시지를 선택해주세요(라디오버튼 선택)."); 
+                    if(this.message_ids.length<1) {
+                        alert("댓글달 메시지를 선택해주세요."); 
                         return;
                     }
                     if(this.messages[this.message_index].user_id==this.user_id) {
@@ -393,10 +410,11 @@
                     formData.append('file', this.files);
                     formData.append('room_id', this.room_id);
                     formData.append('user_id', this.user_id);
-                    formData.append('parent_message_id', this.message_id);
-                    const headers = { 'Content-Type': 'multipart/form-data' };
+                    formData.append('parent_message_id', this.message_ids[0]);
+                    //const headers = { 'Content-Type': 'multipart/form-data' };
                     axios.post(host + "/chat/upload/comment", formData, {
                         headers : {
+                            'Content-Type': 'multipart/form-data',
                             'Authorization' : this.grant_type + ' ' + this.access_token
                         }
                     })
@@ -650,8 +668,9 @@
                     this.message = '';
                 },
                 mark_as_read: function() {
-                    if(this.message_id==="") {
-                        alert("읽음으로 표시할 메시지를 선택해주세요(라디오버튼 선택)."); 
+
+                    if(this.message_ids.length<1) {
+                        alert("읽음으로 표시할 메시지를 선택해주세요."); 
                         return;
                     }
 
@@ -662,9 +681,9 @@
 
                     var payload = {
                         "room_id" : this.room_id,
-                        "message_id" : this.message_id
+                        "message_ids" : this.message_ids
                     };
-                    axios.post(host + '/chat/message/read', JSON.stringify(payload), {
+                    axios.post(host + '/chat/message/mread', JSON.stringify(payload), {
                         headers : {
                             'Content-Type' : 'application/json;charset=utf-8',
                             'Authorization' : this.grant_type + ' ' + this.access_token
@@ -696,14 +715,19 @@
                         return;
                     }
 
+                    if(this.message_ids.length>1) {
+                        alert("댓글달 메시지는 하나만 선택해주세요."); 
+                        return;
+                    }
+
                     if(this.messages[this.message_index].type!="MSG_TALK" && 
                        this.messages[this.message_index].type!="MSG_FILE") {
                         alert("댓글은 메시지와 파일에 대해서만 가능합니다."); 
                         return;
                     }
 
-                    if(this.message_id==="") {
-                        alert("댓글달 메시지를 선택해주세요(라디오버튼 선택)."); 
+                    if(this.message_ids.length<1) {
+                        alert("댓글달 메시지를 선택해주세요."); 
                         return;
                     }
                     if(this.messages[this.message_index].user_id==this.user_id) {
@@ -712,7 +736,7 @@
                     }
 
                     //alert(this.message_id);
-                    ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message, parent_message_id:this.message_id}));
+                    ws.send("/pub/chat/message", {"Authorization":this.grant_type + ' ' + this.access_token}, JSON.stringify({type:type, room_id:this.room_id, message:this.message, parent_message_id:this.message_ids[0]}));
                     this.message = '';
                 },              
                 delete_message: function() {
@@ -1402,7 +1426,7 @@
                         });
 
                     } else if(recv.type=="MSG_ROOM_DELETE") {
-                        location.href = lobby.html;
+                        location.href = "lobby.html";
                     } else if(recv.type=="MSG_FILE") {
                         var is_image = false;
                         if(recv.file_mime_type==="image/gif" || recv.file_mime_type==="image/png" || recv.file_mime_type==="image/jpeg") {

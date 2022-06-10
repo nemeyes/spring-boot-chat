@@ -169,4 +169,28 @@ public enum ErrorCodeEnum {
 			return "페이지 사이즈는 0보다 커야합니다.";
 		}		
 	},
+	CODE_REGIST_WEBHOOK_ERROR {
+		@Override
+		public String toString() {
+			return "웹훅 주소를 등록할 수 없습니다.";
+		}		
+	},
+	CODE_UNREGIST_WEBHOOK_ERROR {
+		@Override
+		public String toString() {
+			return "웹훅 주소를 삭제할 수 없습니다.";
+		}		
+	},
+	CODE_NO_WEBHOOK_INFO {
+		@Override
+		public String toString() {
+			return "웹훅 주소가 존재하지 않습니다.";
+		}		
+	},
+	CODE_WEBHOOK_API_IS_ALLOWED_ADMIN_ONLY {
+		@Override
+		public String toString() {
+			return "웹훅 API는 관리자만이 사용할수 있습니다.";
+		}		
+	},
 }

@@ -1,9 +1,16 @@
 package com.seerstech.chat.server.config;
 
 import lombok.RequiredArgsConstructor;
+
+import java.time.Duration;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
@@ -13,10 +20,21 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import com.seerstech.chat.server.redis.RedisSubscriber;
 
+import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
+
 @RequiredArgsConstructor
 @Configuration
 public class RedisConfig {
 
+    @Value("${spring.redis.host}")
+    private String redisHost;
+
+    @Value("${spring.redis.port}")
+    private int redisPort;
+    
+    
+    
     /**
      * 단일 Topic 사용을 위한 Bean 설정
      */
@@ -24,7 +42,15 @@ public class RedisConfig {
     public ChannelTopic channelTopic() {
         return new ChannelTopic("chatroom");
     }
-
+    
+    @Bean
+    public RedisConnectionFactory redisConnectionFactory() {
+    	RedisClusterConfiguration clusterConfiguration = new RedisClusterConfiguration(); 
+        clusterConfiguration.clusterNode(redisHost, redisPort); 
+        LettuceClientConfiguration clientConfiguration = LettuceClientConfiguration.builder().build();
+        return new LettuceConnectionFactory(clusterConfiguration, clientConfiguration);
+    }
+    
     /**
      * redis에 발행(publish)된 메시지 처리를 위한 리스너 설정
      */

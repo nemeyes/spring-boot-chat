@@ -60,10 +60,10 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
+        configuration.setAllowCredentials(true);
         configuration.addAllowedOriginPattern("*");
         configuration.addAllowedHeader("*");
         configuration.addAllowedMethod("*");
-        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -88,6 +88,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 			//.antMatchers("/user/**").authenticated()
 			.antMatchers(HttpMethod.POST, "/chat/**").authenticated()
 			.antMatchers(HttpMethod.GET, "/chat/download").permitAll()
+			.antMatchers(HttpMethod.POST, "/webhook/regist").authenticated()
+			.antMatchers(HttpMethod.GET, "/webhook/unregist").authenticated()
+			.antMatchers(HttpMethod.GET, "/webhook/info").authenticated()
 			.and()
 			.addFilterBefore(authTokenFilter(), UsernamePasswordAuthenticationFilter.class);
     	

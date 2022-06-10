@@ -21,6 +21,9 @@ public class ChatRoom {
 	@JsonProperty("room_unread_count")
 	private int messageCountUnread;
 	
+	@JsonProperty("room_last_message")
+	private ChatMessage roomLastMessage;
+	
 	public ChatRoom(String id, String name, String description, int messageCountUnread) {
 		this.roomId = id;
 		this.roomName = name;

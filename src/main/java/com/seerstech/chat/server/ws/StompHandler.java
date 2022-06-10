@@ -4,10 +4,14 @@ import com.seerstech.chat.server.jwt.JWTTokenParser;
 import com.seerstech.chat.server.jwt.JWTTokenProvider;
 import com.seerstech.chat.server.model.ChatUserDao;
 import com.seerstech.chat.server.service.ChatUserDetailsService;
+import com.seerstech.chat.server.service.ChatRoomService;
 import com.seerstech.chat.server.service.ChatUserDetails;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Optional;
+
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -24,6 +28,7 @@ public class StompHandler implements ChannelInterceptor {
 
     private final JWTTokenProvider mJWTTokenProvider;
     private final ChatUserDetailsService mChatUserDetailsService;
+    private final ChatRoomService mChatRoomService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -31,7 +36,6 @@ public class StompHandler implements ChannelInterceptor {
         if (StompCommand.CONNECT == accessor.getCommand()) {
         	
             String jwtToken = accessor.getFirstNativeHeader("Authorization");
-            log.info("CONNECT {}", jwtToken);
             String jwt = JWTTokenParser.parse(jwtToken);
             if(mJWTTokenProvider.validateToken(jwt)) {
             	//String sessionId = (String) message.getHeaders().get("simpSessionId");
@@ -46,24 +50,32 @@ public class StompHandler implements ChannelInterceptor {
             
         } else if (StompCommand.SUBSCRIBE == accessor.getCommand()) { // 채팅룸 구독요청
         	
-            //String roomId = mChatService.getRoomId(Optional.ofNullable((String) message.getHeaders().get("simpDestination")).orElse("InvalidRoomId"));
-            //String sessionId = (String) message.getHeaders().get("simpSessionId");
-            //mChatRoomService.joinActiveRoom(sessionId, roomId);
-            //mChatRoomService.plusUserCount(roomId);
-            //String name = Optional.ofNullable((Principal) message.getHeaders().get("simpUser")).map(Principal::getName).orElse("UnknownUser");
-            //mChatService.sendChatMessage(ChatMessage.builder().type(ChatMessageEnum.MSG_ENTER).roomId(roomId).userId(name).build());
-            //log.info("SUBSCRIBED {}, {}", name, roomId);
+        	
+        	UsernamePasswordAuthenticationToken userAuth = (UsernamePasswordAuthenticationToken)message.getHeaders().get("simpUser");
+        	String userId = (String)userAuth.getPrincipal();
+        	String destination = (String) message.getHeaders().get("simpDestination");
+        	if(userId!=null && userId.length()>0 && destination!=null && destination.length()>0) {
+        		String roomId = mChatRoomService.getRoomId(destination);
+        		mChatRoomService.joinActiveRoom(userId, roomId);
+        	}
             
+        } else if (StompCommand.UNSUBSCRIBE == accessor.getCommand()) { // 채팅룸 구독요청
+        	
+        	UsernamePasswordAuthenticationToken userAuth = (UsernamePasswordAuthenticationToken)message.getHeaders().get("simpUser");
+        	String userId = (String)userAuth.getPrincipal();
+        	String destination = (String) message.getHeaders().get("simpDestination");
+        	if(userId!=null && userId.length()>0 && destination!=null && destination.length()>0) {
+        		String roomId = mChatRoomService.getRoomId(destination);
+        		mChatRoomService.leaveActiveRoom(userId, roomId);
+        	}
+        	
         } else if (StompCommand.DISCONNECT == accessor.getCommand()) {
         	
-            //String sessionId = (String) message.getHeaders().get("simpSessionId");
-            //String roomId = mChatRoomService.getJoinedActiveRoom(sessionId);
-            //mChatRoomService.minusUserCount(roomId);
-            //String name = Optional.ofNullable((Principal) message.getHeaders().get("simpUser")).map(Principal::getName).orElse("UnknownUser");
-            //mChatService.sendChatMessage(ChatMessage.builder().type(ChatMessageEnum.MSG_QUIT).roomId(roomId).userId(name).build());
-            //mChatRoomService.leaveActiveRoom(sessionId);
-            //log.info("DISCONNECTED {}, {}", sessionId, roomId);
-            
+        	UsernamePasswordAuthenticationToken userAuth = (UsernamePasswordAuthenticationToken)message.getHeaders().get("simpUser");
+        	String userId = (String)userAuth.getPrincipal();
+        	if(userId!=null && userId.length()>0) {
+        		mChatRoomService.leaveActiveRoom(userId);
+        	}
         }
         return message;
     }

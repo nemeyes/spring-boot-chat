@@ -10,6 +10,8 @@ import com.seerstech.chat.server.vo.ErrorResponse;
 import com.seerstech.chat.server.vo.GetRoomMessageListRequest;
 import com.seerstech.chat.server.vo.GetRoomMessageListResponse;
 import com.seerstech.chat.server.vo.MessageMarkAsDeleteRequest;
+import com.seerstech.chat.server.vo.MessageMarkAsMultiReadRequest;
+import com.seerstech.chat.server.vo.MessageMarkAsMultiReadResponse;
 import com.seerstech.chat.server.vo.MessageMarkAsReadRequest;
 import com.seerstech.chat.server.vo.MessageMarkAsReadResponse;
 
@@ -26,6 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -61,11 +64,13 @@ public class ChatMessageController {
 		}
     }
     
+    @CrossOrigin(origins = "*")
     @PostMapping("/chat/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file, @RequestParam("room_id") String roomId, @RequestParam("user_id") String userId, HttpServletRequest request) {
         return mChatService.upload(file, roomId, userId, request);
     }
     
+    @CrossOrigin(origins = "*")
     @PostMapping("/chat/upload/comment")
     public ResponseEntity<?> uploadCommentFile(@RequestParam("file") MultipartFile file, @RequestParam("room_id") String roomId, @RequestParam("user_id") String userId, @RequestParam("parent_message_id") String parentMessageId, HttpServletRequest request) {
         return mChatService.uploadComment(file, roomId, userId, parentMessageId, request);
@@ -101,6 +106,19 @@ public class ChatMessageController {
     	ErrorCodeEnum code = mChatService.markAsRead(req.getRoomId(), userId, req.getMessageId());
     	if(code==ErrorCodeEnum.CODE_SUCCESS) {
     		return ResponseEntity.ok(new MessageMarkAsReadResponse());
+    	} else {
+    		return ResponseEntity.ok(new ErrorResponse(code, code.toString()));
+    	}
+    }
+    
+    @PostMapping("/chat/message/mread")
+    public ResponseEntity<?> mread(@RequestHeader (name="Authorization") String token, @RequestBody MessageMarkAsMultiReadRequest req) {
+    	String accessToken = JWTTokenParser.parse(token);
+        String userId = mJWTTokenProvider.getUserNameFromJwt(accessToken);
+        
+    	ErrorCodeEnum code = mChatService.markAsMultiRead(req.getRoomId(), userId, req.getMessageIds());
+    	if(code==ErrorCodeEnum.CODE_SUCCESS) {
+    		return ResponseEntity.ok(new MessageMarkAsMultiReadResponse());
     	} else {
     		return ResponseEntity.ok(new ErrorResponse(code, code.toString()));
     	}
