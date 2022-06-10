@@ -45,6 +45,9 @@ public class ChatMessage {
 	
 	@JsonProperty("file_download_path")
 	private String downloadPath;
+	
+	@JsonProperty("file_original_name")
+	private String originalFileName;
 		
 	@JsonProperty("created_time")
 	private long createdTime;
@@ -56,7 +59,7 @@ public class ChatMessage {
 	private List<String> unreadUserIdList;
 
     @Builder
-    public ChatMessage(String messageId, ChatMessageEnum messageType, String roomId, String userId, String message, String mimeType, String downloadPath, long createdTime) {
+    public ChatMessage(String messageId, ChatMessageEnum messageType, String roomId, String userId, String message, String mimeType, String downloadPath, String originalFileName, long createdTime) {
     	this.messageId = messageId;
         this.type = messageType;
         this.roomId = roomId;
@@ -65,5 +68,6 @@ public class ChatMessage {
         this.mimeType = mimeType;
         this.downloadPath = downloadPath;
         this.createdTime = createdTime;
+        this.originalFileName = originalFileName;
     }
 }

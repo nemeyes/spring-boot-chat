@@ -17,6 +17,9 @@ public class UploadResponse extends SuccessResponse {
 	@JsonProperty("file_download_url")
 	String fileDownloadUrl;
 	
+	@JsonProperty("file_original_name")
+	String fileOriginalName;
+	
 	@JsonProperty("file_type")
 	String fileType;
 	

@@ -45,13 +45,8 @@ public class ChatMessageDao extends BaseDao {
 	@Field("file_download_path")
 	private String downloadPath;
 	
-	/*
-	@Field("created_time")
-	private long createdTime;
-	
-	@Field("deleted_time")
-	private long deletedTime;
-	*/
+	@Field("file_original_name")
+	private String originalFileName;
 	
     public ChatMessageDao(String messageId, ChatMessageEnum type, 
     						String roomId, String userId, 

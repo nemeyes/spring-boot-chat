@@ -7,7 +7,7 @@ import com.seerstech.chat.server.jwt.JWTTokenProvider;
 import com.seerstech.chat.server.model.ChatRoleDao;
 import com.seerstech.chat.server.model.ChatRoomDao;
 import com.seerstech.chat.server.model.ChatUserDao;
-import com.seerstech.chat.server.service.ChatMessageService;
+//import com.seerstech.chat.server.service.ChatMessageService;
 import com.seerstech.chat.server.service.ChatRoomService;
 import com.seerstech.chat.server.service.ChatUserDetailsService;
 import com.seerstech.chat.server.vo.CreateRoomRequest;
@@ -35,7 +35,6 @@ import com.seerstech.chat.server.vo.UpdateRoomRequest;
 import com.seerstech.chat.server.vo.UpdateRoomResponse;
 import com.seerstech.chat.server.vo.ChatMessage;
 import com.seerstech.chat.server.vo.ChatRoom;
-import com.seerstech.chat.server.vo.ChatUser;
 
 import lombok.RequiredArgsConstructor;
 
@@ -44,7 +43,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -58,7 +56,7 @@ public class ChatRoomController {
 
     private final ChatRoomService mChatRoomService;
     private final ChatUserDetailsService mChatUserService;
-    private final ChatMessageService mChatMessageService;
+    //private final ChatMessageService mChatMessageService;
 
     @PostMapping("/rooms")
     @ResponseBody
@@ -118,7 +116,33 @@ public class ChatRoomController {
     	return ResponseEntity.ok(response);
     	*/
     }
-
+    
+    /*
+    @GetMapping("/room/{roomId}")
+    @ResponseBody
+    public ResponseEntity<?> info(@PathVariable String roomId) {
+     */
+    
+    @GetMapping("/rooms/{userId}")
+    @ResponseBody
+    public ResponseEntity<?> list(@PathVariable String userId, @RequestParam int page, @RequestParam int page_size) {
+    	if(page<1) {
+    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_PAGE_NUMBER_MUST_BE_GREATER_THAN_ZERO, ErrorCodeEnum.CODE_PAGE_NUMBER_MUST_BE_GREATER_THAN_ZERO.toString()));
+    	}
+    	
+    	if(page_size<1) {
+    		return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO, ErrorCodeEnum.CODE_PAGE_SIZE_MUST_BE_GREATER_THAN_ZERO.toString()));
+    	}
+    	
+    	GetRoomListResponse response = mChatRoomService.findJoinedRoom(userId, page, page_size);
+    	
+    	if(response!=null) {
+    		return ResponseEntity.ok(response);   		
+		} else {
+			return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_NO_ROOM_EXIST, ErrorCodeEnum.CODE_NO_ROOM_EXIST.toString()));
+		}
+    }
+    
     @PostMapping("/room/create")
     @ResponseBody
     public ResponseEntity<?> create(@RequestHeader (name="Authorization") String token, @RequestBody CreateRoomRequest req) {

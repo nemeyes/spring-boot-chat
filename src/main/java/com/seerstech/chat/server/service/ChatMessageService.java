@@ -23,7 +23,9 @@ import com.seerstech.chat.server.vo.UploadResponse;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URLEncoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,7 +39,9 @@ import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.UrlResource;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpHeaders;
@@ -64,9 +68,14 @@ public class ChatMessageService {
 	private ChatRoomUserRepository mChatRoomUserRepository;
 	@Autowired
 	private ChatMessageStatusRepository mChatMessageStatusRepository;
+	@Autowired
+	private WebhookService mWebhookService;
 	
     private final ChannelTopic mChannelTopic;
     private final RedisTemplate<?, ?> mRedisTemplate;
+    
+    @Resource(name = "redisTemplate")
+    private SetOperations<String, String> mJoinedChatRoom;
         
     @Resource(name = "uploadDir")
     private final String mFileStorageLocation;
@@ -76,6 +85,12 @@ public class ChatMessageService {
     
     @Autowired
 	private MongoTemplate mongoTemplate;
+    
+    //@Resource(name = "redisTemplate")
+    //private HashOperations<String, String, String> mJoinedChatRoom;
+    //String jsonMessage = mRoomMessage.get(CHAT_MESSAGE_BY_TIME + roomId, messageId);
+    //mRoomMessage.put(CHAT_MESSAGE_BY_TIME + message.getRoomId(), redisMessage.getMessageId(), jsonRedisMessage);
+    //mRoomMessage.delete(CHAT_MESSAGE_BY_TIME + message.getRoomId(), redisMessage.getMessageId());
 
     
     @Autowired
@@ -92,6 +107,10 @@ public class ChatMessageService {
             return destination.substring(lastIndex + 1);
         else
             return "";
+    }
+    
+    public void enterRoom(String roomId, String userId) {
+    	
     }
     
     public GetRoomMessageListResponse getMessageListByRoomId(String roomId, int page, int size) {
@@ -115,6 +134,7 @@ public class ChatMessageService {
     					.message(item.getMessage())
     					.mimeType(item.getMimeType())
     					.downloadPath(mDownloadUrl + item.getDownloadPath())
+    					.originalFileName(item.getOriginalFileName())
     					.createdTime(item.getCreatedTime())
     					.build();
     			message.setNType(item.getNType());
@@ -221,6 +241,38 @@ public class ChatMessageService {
     	}
     }
     
+    public ErrorCodeEnum markAsMultiRead(String roomId, String userId, List<String> messageIds) {
+    	
+    	messageIds.forEach(messageId -> {
+    	   	boolean exist = mChatMessageStatusRepository.existsByRoomIdAndUserIdAndMessageId(roomId, userId, messageId);
+        	
+        	if(exist) {
+    	    	mChatMessageStatusRepository.deleteByRoomIdAndUserIdAndMessageId(roomId, userId, messageId);
+    	    	
+    	    	final List<String> unreadUserIdList = new ArrayList<String>();
+    	    	List<ChatMessageStatusDao> messageStatusDaoList = mChatMessageStatusRepository.findByRoomIdAndMessageId(roomId, messageId);
+    	    	messageStatusDaoList.forEach(messageStatusDao -> {
+    		    	unreadUserIdList.add(messageStatusDao.getUserId());
+    	    	});
+    	    	
+    	    	ChatMessageDao messageDao = mChatMessageRepository.findByMessageId(messageId);
+    	    	
+    	        ChatMessage markAsReadMessage = ChatMessage.builder()
+    					.messageId(messageId)
+    					.messageType(ChatMessageEnum.MSG_READ)
+    					.roomId(roomId)
+    					.userId(messageDao.getUserId())
+    					.createdTime(messageDao.getCreatedTime())
+    					.build();
+    	        
+    	        markAsReadMessage.setUnreadUserIdList(unreadUserIdList);
+    	        mRedisTemplate.convertAndSend(mChannelTopic.getTopic(), markAsReadMessage);
+        	}
+    	});
+    	
+    	return ErrorCodeEnum.CODE_SUCCESS;
+    }
+    
     public ErrorCodeEnum markAsDelete(String messageId, String userId) {
     	
     	boolean exist = mChatMessageStatusRepository.existsByMessageId(messageId);
@@ -267,8 +319,6 @@ public class ChatMessageService {
     }
     
     public void send(ChatMessage message) {
-    	
-    	
     	//if parent message is deleted(mark as delete), sub message(new message) can not be saved and sended to participants
     	if(message.getParentMessageId()!=null && message.getParentMessageId().length()>0) {
     		ChatMessageDao parentMessageDao = mChatMessageRepository.findByMessageId(message.getParentMessageId());
@@ -374,16 +424,34 @@ public class ChatMessageService {
     	if(message.getType()==ChatMessageEnum.MSG_FILE) {
     		dao.setMimeType(message.getMimeType());
     		dao.setDownloadPath(message.getDownloadPath());
+    		dao.setOriginalFileName(message.getOriginalFileName());
     	}
     	if(message.getType()==ChatMessageEnum.MSG_NOTI) {
     		dao.setNType(message.getNType());
     	}
-    	mChatMessageRepository.save(dao);
     	
     	if(message.getType()==ChatMessageEnum.MSG_FILE) {
     		message.setDownloadPath(mDownloadUrl + message.getDownloadPath());
     	}
     	mRedisTemplate.convertAndSend(mChannelTopic.getTopic(), message);
+    	mChatMessageRepository.save(dao);
+    	
+    	final List<String> unJoinedUserIdList = new ArrayList<String>();
+    	if(message.getType()==ChatMessageEnum.MSG_TALK || 
+    	   message.getType()==ChatMessageEnum.MSG_FILE ||
+    	   message.getType()==ChatMessageEnum.MSG_NOTI) {
+    		List<ChatRoomUserDao> roomUserDaoList = mChatRoomUserRepository.findByRoomId(message.getRoomId());
+	    	roomUserDaoList.forEach(roomUserDao -> {
+	    		if(!message.getUserId().equals(roomUserDao.getUserId()) && roomUserDao.getUserJoinedRoom()==true) {
+	    			if(!isJoinedActiveRoom(roomUserDao.getUserId(), message.getRoomId())) {
+	    				unJoinedUserIdList.add(roomUserDao.getUserId());
+	    			}
+	    		}
+	    	});
+	    	if(unJoinedUserIdList.size()>0) {
+	    		mWebhookService.sendChatUnreadNotification(message, unJoinedUserIdList);
+	    	}
+    	}
     }
     
     public ResponseEntity<?> upload(MultipartFile file, String roomId, String userId, HttpServletRequest request) {
@@ -438,6 +506,7 @@ public class ChatMessageService {
 					        	.userId(userId)
 					        	.mimeType(mimeType)
 					        	.downloadPath(uploadFile.getName())
+					        	.originalFileName(file.getOriginalFilename())
 					        	.createdTime(TimeUtil.unixTime())
 					        	.build();
         
@@ -447,6 +516,7 @@ public class ChatMessageService {
         
     	return ResponseEntity.ok(UploadResponse.builder().fileName(uploadFile.getName())
     													.fileDownloadUrl(fileDownloadUri)
+    													.fileOriginalName(file.getOriginalFilename())
     													.fileSize(file.getSize())
     													.fileType(mimeType)
     													.build());
@@ -505,8 +575,10 @@ public class ChatMessageService {
 					        	.userId(userId)
 					        	.mimeType(mimeType)
 					        	.downloadPath(uploadFile.getName())
+					        	.originalFileName(file.getOriginalFilename())
 					        	.createdTime(TimeUtil.unixTime())
 					        	.build();
+        
         message.setParentMessageId(parentMessageId);
         
         send(message);
@@ -514,13 +586,17 @@ public class ChatMessageService {
         String fileDownloadUri = mDownloadUrl + uploadFile.getName();
     	return ResponseEntity.ok(UploadResponse.builder().fileName(uploadFile.getName())
     													.fileDownloadUrl(fileDownloadUri)
+    													.fileOriginalName(file.getOriginalFilename())
     													.fileSize(file.getSize())
     													.fileType(mimeType)
     													.build());
     }
     
+    /*
     public ResponseEntity<?> download(String fileName, HttpServletRequest request) {
         try {
+        	ChatMessageDao dao = mChatMessageRepository.findByFileDownloadPath(fileName);
+        	
         	Path filePath = Paths.get(mFileStorageLocation, fileName).normalize();
         	org.springframework.core.io.Resource resource = new UrlResource(filePath.toUri());
             if(resource.exists()) {
@@ -549,9 +625,58 @@ public class ChatMessageService {
 														ErrorCodeEnum.CODE_ERROR_COPY_FILE_TO_STORAGE.toString()));
         }
     }
+    */
+    
+    public ResponseEntity<?> download(String fileName, HttpServletRequest request) {
+        try {
+        	ChatMessageDao dao = mChatMessageRepository.findByFileDownloadPath(fileName);
+        	
+        	Path filePath = Paths.get(mFileStorageLocation, fileName).normalize();
+        	org.springframework.core.io.Resource resource = new UrlResource(filePath.toUri());
+            if(resource.exists()) {
+                String contentType = null;
+                try {
+                    contentType = request.getServletContext().getMimeType(resource.getFile().getAbsolutePath());
+                } catch (IOException ex) {
+                	return  ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_ERROR_GET_FILE_CONTENT_TYPE, 
+																ErrorCodeEnum.CODE_ERROR_GET_FILE_CONTENT_TYPE.toString()));
+                }
+                
+                if(contentType == null) {
+                    contentType = "application/octet-stream";
+                }
+                
+                //                        //.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + dao.getOriginalFileName() + "\"")
+                try {
+                	
+					return ResponseEntity.ok()
+					        .contentType(MediaType.parseMediaType(contentType))
+					        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; fileName=\"" + URLEncoder.encode(dao.getOriginalFileName(), "UTF-8") + "\"")
+					        .body(resource);
+					
+					
+				} catch (UnsupportedEncodingException e) {
+					// TODO Auto-generated catch block
+					//e.printStackTrace();
+	            	return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_GENERIC_FAIL, 
+							e.getMessage()));
+				}
+            } else {
+            	return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_ERROR_COPY_FILE_TO_STORAGE, 
+															ErrorCodeEnum.CODE_ERROR_COPY_FILE_TO_STORAGE.toString()));
+            }
+        } catch (MalformedURLException ex) {
+        	return ResponseEntity.ok(new ErrorResponse(ErrorCodeEnum.CODE_ERROR_COPY_FILE_TO_STORAGE, 
+														ErrorCodeEnum.CODE_ERROR_COPY_FILE_TO_STORAGE.toString()));
+        }
+    }
     
     public int getUnreadMessageCnt(String roomId, String userId) {
     	return (mChatMessageStatusRepository.countByRoomIdAndUserId(roomId, userId)).intValue();
+    }
+    
+    private boolean isJoinedActiveRoom(String userId, String roomId) {
+    	return mJoinedChatRoom.isMember(userId, roomId);
     }
 
     private File convert(MultipartFile srcMPFile, String dstFilename) throws FileStorageException {

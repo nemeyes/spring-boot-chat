@@ -15,9 +15,13 @@ public interface ChatMessageRepository extends MongoRepository<ChatMessageDao, S
 	
 	//@Query("{'room_id' : ?0}")
 	Page<ChatMessageDao> findByRoomId(String roomId, Pageable pageable);
+	Page<ChatMessageDao> findByRoomIdOrderByCreatedTimeDesc(String roomId, Pageable pageable);
 	
 	//@Query("{'message_id' : ?0}")
 	ChatMessageDao findByMessageId(String messageId);
+	
+	@Query("{'file_download_path' : ?0}")
+	ChatMessageDao findByFileDownloadPath(String downloadPath);
 	
 	List<ChatMessageDao> findByParentMessageId(String messageId);
 	

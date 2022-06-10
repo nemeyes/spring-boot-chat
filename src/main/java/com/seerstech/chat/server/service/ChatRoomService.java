@@ -4,6 +4,7 @@ import com.seerstech.chat.server.constant.ChatMessageEnum;
 import com.seerstech.chat.server.constant.ChatNotificationEnum;
 import com.seerstech.chat.server.constant.ErrorCodeEnum;
 import com.seerstech.chat.server.model.ChatMessageDao;
+import com.seerstech.chat.server.model.ChatMessageStatusDao;
 import com.seerstech.chat.server.model.ChatRoomUserDao;
 import com.seerstech.chat.server.model.ChatRoomDao;
 import com.seerstech.chat.server.model.ChatUserDao;
@@ -24,7 +25,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,13 +37,13 @@ import javax.annotation.Resource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class ChatRoomService {
 
-    @Resource(name = "redisTemplate")
-    private ValueOperations<String, String> mhoJoinedLiveParticipants;
+    //final ValueOperations<?, ?> mhoJoinedLiveParticipants;
 
     @Autowired
     private ChatUserRepository mChatUserRepository;
@@ -52,6 +57,30 @@ public class ChatRoomService {
     private ChatMessageStatusRepository mChatMessageStatusRepository;
     @Autowired
     private ChatMessageService mChatMessageService;
+    
+    private final RedisTemplate<?, ?> mRedisTemplate;
+    
+    @Resource(name = "redisTemplate")
+    private SetOperations<String, String> mJoinedChatRoom;
+    
+    @Resource(name = "downloadUrl")
+    private final String mDownloadUrl;
+    
+    @Autowired
+    public ChatRoomService(RedisTemplate<?, ?> redisTemplate, String downloadUrl) {
+		this.mRedisTemplate = redisTemplate;    
+		this.mDownloadUrl = downloadUrl;
+		
+		//mhoJoinedLiveParticipants = mRedisTemplate.opsForValue();
+    }
+    
+    public String getRoomId(String destination) {
+        int lastIndex = destination.lastIndexOf('/');
+        if (lastIndex != -1)
+            return destination.substring(lastIndex + 1);
+        else
+            return "";
+    }
 
     public ChatRoomDao findRoomByRoomId(String roomId) {
     	return mChatRoomRepository.findByRoomId(roomId);
@@ -245,7 +274,87 @@ public class ChatRoomService {
     		
     		roomDaoList.forEach(roomDao->{
     			ChatRoom room = new ChatRoom(roomDao.getRoomId(), roomDao.getRoomName(), roomDao.getRoomDescription(), 0);
+
+    			
+            	List<ChatMessageDao> pageMessageDaos = new ArrayList<ChatMessageDao>();
+        		Pageable msgPaging = PageRequest.of(0,  1);
+        		Page<ChatMessageDao> pageMessageList = mChatMessageRepository.findByRoomIdOrderByCreatedTimeDesc(roomDao.getRoomId(), msgPaging);
+        		pageMessageDaos = pageMessageList.getContent();
+        		
+        		pageMessageDaos.forEach(item -> {
+        			ChatMessage message = ChatMessage.builder()
+        					.messageId(item.getMessageId())
+        					.messageType(item.getType())
+        					.roomId(item.getRoomId())
+        					.userId(item.getUserId())
+        					.message(item.getMessage())
+        					.mimeType(item.getMimeType())
+        					.downloadPath(mDownloadUrl + item.getDownloadPath())
+        					.createdTime(item.getCreatedTime())
+        					.build();
+        			message.setNType(item.getNType());
+        			
+        			if(item.getCreatedTime()<=item.getDeletedTime()) {
+        				message.setType(ChatMessageEnum.MSG_DELETE);
+        				message.setMessage("");
+        				message.setDownloadPath("");
+        				message.setMimeType("");
+        			}
+        			
+        			if((message.getType()==ChatMessageEnum.MSG_ENTER) || (message.getType()==ChatMessageEnum.MSG_QUIT)) {
+        				ChatUserDao userItem = mChatUserRepository.findByUserId(message.getUserId());
+        				ChatRoomUser user = ChatRoomUser.builder()
+        						.roomId(roomDao.getRoomId())
+        						.userId(userItem.getUserId())
+        						.userNickname(userItem.getUserNickname())
+        						.userJoinedRoom((message.getType()==ChatMessageEnum.MSG_ENTER)?true:false)
+        						.build();
+        				
+        				message.setUserInfo(user);
+        			}
+        			
+        			if(item.getParentMessageId()!=null && item.getParentMessageId().length()>0) {
+        				ChatMessageDao parentItem = mChatMessageRepository.findByMessageId(item.getParentMessageId());
+        				
+        				ChatMessage parentMessage = ChatMessage.builder()
+        						.messageId(parentItem.getMessageId())
+        						.messageType(parentItem.getType())
+        						.roomId(parentItem.getRoomId())
+            					.userId(parentItem.getUserId())
+            					.message(parentItem.getMessage())
+            					.mimeType(parentItem.getMimeType())
+            					.downloadPath(mDownloadUrl + parentItem.getDownloadPath())
+            					.createdTime(parentItem.getCreatedTime())
+            					.build();
+        				
+            			if(parentItem.getCreatedTime()<=parentItem.getDeletedTime()) {
+            				parentMessage.setType(ChatMessageEnum.MSG_DELETE);
+            				parentMessage.setMessage("");
+            				parentMessage.setDownloadPath("");
+            				parentMessage.setMimeType("");
+            			}
+        						
+        				message.setParentMessageId(parentMessage.getMessageId());
+        				message.setParentMessage(parentMessage);
+        			}
+        			
+        			if(message.getType()==ChatMessageEnum.MSG_TALK || message.getType()==ChatMessageEnum.MSG_FILE) {
+        				final List<String> unreadUserIdList = new ArrayList<String>();
+        				List<ChatMessageStatusDao> unreadUserListDao = mChatMessageStatusRepository.findByRoomIdAndMessageId(roomDao.getRoomId(), message.getMessageId());
+        				unreadUserListDao.forEach(unreadUserDao->{
+        					unreadUserIdList.add(unreadUserDao.getUserId());
+        				});
+        				message.setUnreadUserIdList(unreadUserIdList);
+        			}
+        			
+        			
+        			
+        			room.setRoomLastMessage(message);
+                });
+        		
+    			
     			rooms.add(room);
+
     		});
     		
     		response.setRoomList(rooms);
@@ -266,7 +375,6 @@ public class ChatRoomService {
     		GetRoomListResponse response = new GetRoomListResponse();
         	List<ChatRoom> rooms = new ArrayList<ChatRoom>();
         	
-        	//List<ChatRoomUserDao> joinedRoomList = null;
     		Pageable paging = PageRequest.of(page-1,  size);
     		Page<ChatRoomUserDao> pageRoomUserList  = mChatRoomUserRepository.findByUserIdAndUserJoinedRoom(userId, true, paging);
     		List<ChatRoomUserDao> joinedRoomList = pageRoomUserList.getContent();
@@ -275,6 +383,87 @@ public class ChatRoomService {
         		ChatRoomDao roomDao = mChatRoomRepository.findByRoomId(participant.getRoomId());
         		int unreadCnt = mChatMessageService.getUnreadMessageCnt(roomDao.getRoomId(), userId);
         		ChatRoom room = new ChatRoom(roomDao.getRoomId(), roomDao.getRoomName(), roomDao.getRoomDescription(), unreadCnt);
+        		
+        		
+            	List<ChatMessageDao> pageMessageDaos = new ArrayList<ChatMessageDao>();
+        		Pageable msgPaging = PageRequest.of(0,  1);
+        		Page<ChatMessageDao> pageMessageList = mChatMessageRepository.findByRoomIdOrderByCreatedTimeDesc(roomDao.getRoomId(), msgPaging);
+        		pageMessageDaos = pageMessageList.getContent();
+        		
+        		pageMessageDaos.forEach(item -> {
+        			ChatMessage message = ChatMessage.builder()
+        					.messageId(item.getMessageId())
+        					.messageType(item.getType())
+        					.roomId(item.getRoomId())
+        					.userId(item.getUserId())
+        					.message(item.getMessage())
+        					.mimeType(item.getMimeType())
+        					.downloadPath(mDownloadUrl + item.getDownloadPath())
+        					.createdTime(item.getCreatedTime())
+        					.build();
+        			message.setNType(item.getNType());
+        			
+        			if(item.getCreatedTime()<=item.getDeletedTime()) {
+        				message.setType(ChatMessageEnum.MSG_DELETE);
+        				message.setMessage("");
+        				message.setDownloadPath("");
+        				message.setMimeType("");
+        			}
+        			
+        			if((message.getType()==ChatMessageEnum.MSG_ENTER) || (message.getType()==ChatMessageEnum.MSG_QUIT)) {
+        				ChatUserDao userItem = mChatUserRepository.findByUserId(message.getUserId());
+        				ChatRoomUser user = ChatRoomUser.builder()
+        						.roomId(roomDao.getRoomId())
+        						.userId(userItem.getUserId())
+        						.userNickname(userItem.getUserNickname())
+        						.userJoinedRoom((message.getType()==ChatMessageEnum.MSG_ENTER)?true:false)
+        						.build();
+        				
+        				message.setUserInfo(user);
+        			}
+        			
+        			if(item.getParentMessageId()!=null && item.getParentMessageId().length()>0) {
+        				ChatMessageDao parentItem = mChatMessageRepository.findByMessageId(item.getParentMessageId());
+        				
+        				ChatMessage parentMessage = ChatMessage.builder()
+        						.messageId(parentItem.getMessageId())
+        						.messageType(parentItem.getType())
+        						.roomId(parentItem.getRoomId())
+            					.userId(parentItem.getUserId())
+            					.message(parentItem.getMessage())
+            					.mimeType(parentItem.getMimeType())
+            					.downloadPath(mDownloadUrl + parentItem.getDownloadPath())
+            					.createdTime(parentItem.getCreatedTime())
+            					.build();
+        				
+            			if(parentItem.getCreatedTime()<=parentItem.getDeletedTime()) {
+            				parentMessage.setType(ChatMessageEnum.MSG_DELETE);
+            				parentMessage.setMessage("");
+            				parentMessage.setDownloadPath("");
+            				parentMessage.setMimeType("");
+            			}
+        						
+        				message.setParentMessageId(parentMessage.getMessageId());
+        				message.setParentMessage(parentMessage);
+        			}
+        			
+        			if(message.getType()==ChatMessageEnum.MSG_TALK || message.getType()==ChatMessageEnum.MSG_FILE) {
+        				final List<String> unreadUserIdList = new ArrayList<String>();
+        				List<ChatMessageStatusDao> unreadUserListDao = mChatMessageStatusRepository.findByRoomIdAndMessageId(roomDao.getRoomId(), message.getMessageId());
+        				unreadUserListDao.forEach(unreadUserDao->{
+        					unreadUserIdList.add(unreadUserDao.getUserId());
+        				});
+        				message.setUnreadUserIdList(unreadUserIdList);
+        			}
+        			
+        			
+        			
+        			room.setRoomLastMessage(message);
+                });
+        		
+        		
+        		
+        		
         		rooms.add(room);
         	});
     		
@@ -466,16 +655,27 @@ public class ChatRoomService {
 	}
 	
     
-    public void joinActiveRoom(String sessionId, String roomId) {
-        mhoJoinedLiveParticipants.append(sessionId, roomId);
+    public void joinActiveRoom(String userId, String roomId) {
+    	mJoinedChatRoom.add(userId, roomId);
     }
 
-    public String getJoinedActiveRoom(String sessionId) {
-        return mhoJoinedLiveParticipants.get(sessionId);
+    /*
+    public synchronized Set<String> getJoinedActiveRoom(String userId) {
+        return mJoinedChatRoom.members(userId);
     }
+    
+    public synchronized boolean isJoinedActiveRoom(String userId, String roomId) {
+    	return mJoinedChatRoom.isMember(userId, roomId);
+    }
+    */
 
-    public void leaveActiveRoom(String sessionId) {
-        mhoJoinedLiveParticipants.getAndDelete(sessionId);
+    public void leaveActiveRoom(String userId, String roomId) {
+    	mJoinedChatRoom.remove(userId, roomId);
+    }
+    
+    public void leaveActiveRoom(String userId) {
+        Set<String> members = mJoinedChatRoom.members(userId);
+        mJoinedChatRoom.remove(userId, members.toArray(new String[members.size()]));
     }
 
     /*
