@@ -120,7 +120,7 @@ public class ChatMessageService {
         	
         	List<ChatMessageDao> pageMessageDaos = new ArrayList<ChatMessageDao>();
     		Pageable paging = PageRequest.of(page-1,  size);
-    		Page<ChatMessageDao> pageMessageList = mChatMessageRepository.findByRoomId(roomId, paging);
+    		Page<ChatMessageDao> pageMessageList = mChatMessageRepository.findByRoomIdOrderByCreatedTimeDesc(roomId, paging);
     		
     		pageMessageDaos = pageMessageList.getContent();
     		List<ChatMessage> messageList = new ArrayList<ChatMessage>();
@@ -194,7 +194,7 @@ public class ChatMessageService {
     			
     			
     			
-    			messageList.add(message);
+    			messageList.add(0, message);
             });
             
 			response.setRoomId(roomId);
